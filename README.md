@@ -2,6 +2,8 @@
 
 Claude Code のエージェント活動を、CC-SIer 仮想組織のピクセルオフィスとして可視化する Web アプリ（AI Virtual Office）。
 
+> **参考プロジェクト**: 本アプリは [pixel-agents](https://github.com/pixel-agents-hq/pixel-agents)（Claude Code エージェントをピクセルアートオフィスで可視化する VS Code 拡張 / CLI）にインスパイアされています。基本アイデア（Claude Code hooks / JSONL トランスクリプトの二系統イベント取得、Canvas 2D + キャラクター状態機械、ツール実行 → アニメーション写像）は同プロジェクトの分析に基づき、そこに **CC-SIer 仮想組織のマスタ駆動オフィス生成**（部署 = 部屋、ロール = キャラ）、**task-log リプレイ**、**クラウド配信**を独自要素として加えた別実装です。
+
 ## アーキテクチャ概要
 
 1. Claude Code hooks がツール実行・セッション状態の変化を発火
@@ -9,6 +11,12 @@ Claude Code のエージェント活動を、CC-SIer 仮想組織のピクセル
 3. ingest API がイベントを永続化し、SSE で Canvas オフィスへ配信
 
 詳細は [docs/design/architecture-design.md](docs/design/architecture-design.md) / [docs/design/requirements.md](docs/design/requirements.md) を参照。
+
+## 参考リンク
+
+- [pixel-agents (pixel-agents-hq)](https://github.com/pixel-agents-hq/pixel-agents) — 参考実装（本家）。Hooks/JSONL 二系統・Canvas 2D 状態機械の設計参考
+- [Zenn: Claude Code を眺めて楽しむ Pixel Agents](https://zenn.dev/and_dot/articles/d987d07720929430) — 使用感・既知の課題の参考記事
+- [Claude Code Hooks リファレンス](https://code.claude.com/docs/en/hooks) — イベント取得の正本仕様
 
 ## セットアップ
 
