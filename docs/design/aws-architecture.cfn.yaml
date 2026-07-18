@@ -1,0 +1,314 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  AI Virtual Office - serverless stack on AWS.
+  Ingest pipeline (HTTP API + Lambda + DynamoDB with TTL), realtime fan-out
+  (WebSocket API + connection table + PostToConnection), static UI hosting
+  (S3 + CloudFront OAC) and Cognito user pool for viewer auth. No VPC required.
+
+Parameters:
+  EnvType:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, prod]
+  IngestToken:
+    Type: String
+    NoEcho: true
+    MinLength: 24
+    Description: Bearer token the local Relay presents to the ingest API.
+  EventTtlDays:
+    Type: Number
+    Default: 30
+    Description: Retention days for OfficeEvent items (DynamoDB TTL).
+
+Conditions:
+  IsProd: !Equals [!Ref EnvType, prod]
+
+Resources:
+  # ---------------- Data stores ----------------
+  EventsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "office-events-${EnvType}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: pk, AttributeType: S }   # org#date
+        - { AttributeName: sk, AttributeType: S }   # ts#seq
+      KeySchema:
+        - { AttributeName: pk, KeyType: HASH }
+        - { AttributeName: sk, KeyType: RANGE }
+      TimeToLiveSpecification:
+        AttributeName: expireAt
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [IsProd, true, false]
+
+  ConnectionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "office-connections-${EnvType}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: connectionId, AttributeType: S }
+      KeySchema:
+        - { AttributeName: connectionId, KeyType: HASH }
+      TimeToLiveSpecification:
+        AttributeName: expireAt
+        Enabled: true
+
+  # ---------------- IAM ----------------
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: office-tables-and-ws
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [dynamodb:PutItem, dynamodb:DeleteItem, dynamodb:Query, dynamodb:Scan]
+                Resource:
+                  - !GetAtt EventsTable.Arn
+                  - !GetAtt ConnectionsTable.Arn
+              - Effect: Allow
+                Action: execute-api:ManageConnections
+                Resource: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RealtimeWebSocketApi}/*"
+
+  # ---------------- Lambdas ----------------
+  EventProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "office-event-processor-${EnvType}"
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      MemorySize: 256
+      Timeout: 10
+      Environment:
+        Variables:
+          EVENTS_TABLE: !Ref EventsTable
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+          INGEST_TOKEN: !Ref IngestToken
+          TTL_DAYS: !Ref EventTtlDays
+          WS_ENDPOINT: !Sub "https://${RealtimeWebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvType}"
+      Code:
+        ZipFile: |
+          // Placeholder: validate bearer token, normalize OfficeEvent,
+          // put to EVENTS_TABLE (with expireAt TTL), scan CONNECTIONS_TABLE
+          // and PostToConnection to broadcast. Real code ships from the
+          // ai-virtual-office repository (packages/protocol shared schema).
+          exports.handler = async () => ({ statusCode: 200 });
+
+  ConnectionManagerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "office-connection-manager-${EnvType}"
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      MemorySize: 128
+      Timeout: 5
+      Environment:
+        Variables:
+          CONNECTIONS_TABLE: !Ref ConnectionsTable
+      Code:
+        ZipFile: |
+          // Placeholder: on $connect store connectionId (with TTL),
+          // on $disconnect remove it.
+          exports.handler = async () => ({ statusCode: 200 });
+
+  # ---------------- Ingest HTTP API ----------------
+  IngestHttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub "office-ingest-${EnvType}"
+      ProtocolType: HTTP
+  IngestIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref IngestHttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt EventProcessorFunction.Arn
+      PayloadFormatVersion: "2.0"
+  IngestRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref IngestHttpApi
+      RouteKey: "POST /ingest"
+      Target: !Sub "integrations/${IngestIntegration}"
+  IngestStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref IngestHttpApi
+      StageName: !Ref EnvType
+      AutoDeploy: true
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 100
+        ThrottlingRateLimit: 50
+  IngestLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref EventProcessorFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${IngestHttpApi}/*"
+
+  # ---------------- Realtime WebSocket API ----------------
+  RealtimeWebSocketApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub "office-realtime-${EnvType}"
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: "$request.body.action"
+
+  # WebSocket API は JWT オーソライザ非対応のため、Cognito JWT を検証する
+  # Lambda REQUEST オーソライザで $connect を保護する（図の「JWT オーソライザ検証」に対応）
+  WsAuthorizerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "office-ws-authorizer-${EnvType}"
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      MemorySize: 128
+      Timeout: 5
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref ViewerUserPool
+          APP_CLIENT_ID: !Ref ViewerUserPoolClient
+      Code:
+        ZipFile: |
+          // Placeholder: verify the Cognito JWT passed as ?token= query param
+          // (aws-jwt-verify) and return an IAM policy Allow/Deny.
+          exports.handler = async () => ({ isAuthorized: false });
+  WsAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref RealtimeWebSocketApi
+      Name: !Sub "office-ws-jwt-authorizer-${EnvType}"
+      AuthorizerType: REQUEST
+      AuthorizerUri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WsAuthorizerFunction.Arn}/invocations"
+      IdentitySource:
+        - "route.request.querystring.token"
+  WsAuthorizerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref WsAuthorizerFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RealtimeWebSocketApi}/*"
+
+  WsConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref RealtimeWebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ConnectionManagerFunction.Arn}/invocations"
+  WsConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref RealtimeWebSocketApi
+      RouteKey: "$connect"
+      AuthorizationType: CUSTOM
+      AuthorizerId: !Ref WsAuthorizer
+      Target: !Sub "integrations/${WsConnectIntegration}"
+  WsDisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref RealtimeWebSocketApi
+      RouteKey: "$disconnect"
+      Target: !Sub "integrations/${WsConnectIntegration}"
+  WsStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref RealtimeWebSocketApi
+      StageName: !Ref EnvType
+      AutoDeploy: true
+  WsLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ConnectionManagerFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RealtimeWebSocketApi}/*"
+
+  # ---------------- Static hosting ----------------
+  StaticBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub "ai-virtual-office-ui-${AWS::AccountId}-${EnvType}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub "office-oac-${EnvType}"
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        HttpVersion: http2
+        Origins:
+          - Id: static-ui
+            DomainName: !GetAtt StaticBucket.RegionalDomainName
+            OriginAccessControlId: !Ref OriginAccessControl
+            S3OriginConfig:
+              OriginAccessIdentity: ""
+        DefaultCacheBehavior:
+          TargetOriginId: static-ui
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6   # CachingOptimized (managed)
+        PriceClass: PriceClass_200
+
+  # ---------------- Viewer auth ----------------
+  ViewerUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "office-viewers-${EnvType}"
+      UsernameAttributes: [email]
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: !If [IsProd, false, true]
+  ViewerUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref ViewerUserPool
+      ClientName: office-web
+      GenerateSecret: false
+      ExplicitAuthFlows: [ALLOW_USER_SRP_AUTH, ALLOW_REFRESH_TOKEN_AUTH]
+
+Outputs:
+  CloudFrontDomain:
+    Description: Viewer URL origin (attach Route 53 Alias for custom domain)
+    Value: !GetAtt Distribution.DomainName
+  IngestEndpoint:
+    Description: Relay forward target (POST /ingest with Bearer token)
+    Value: !Sub "https://${IngestHttpApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvType}/ingest"
+  WebSocketEndpoint:
+    Description: Browser realtime subscription endpoint
+    Value: !Sub "wss://${RealtimeWebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvType}"
+  UserPoolId:
+    Value: !Ref ViewerUserPool

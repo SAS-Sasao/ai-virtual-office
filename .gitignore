@@ -1,0 +1,17 @@
+node_modules/
+.next/
+dist/
+build/
+out/
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+.DS_Store
+*.log
+npm-debug.log*
+pnpm-debug.log*
+.turbo/
+coverage/
+*.sqlite
+*.sqlite3

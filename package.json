@@ -1,0 +1,11 @@
+{
+  "name": "ai-virtual-office",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev": "echo \"TODO: pnpm --filter web dev (M0 で実装予定)\" && exit 1",
+    "build": "echo \"TODO: pnpm -r build (M0 で実装予定)\" && exit 1",
+    "test": "echo \"TODO: vitest run（protocol/relay/state-machine 対象、M1 で実装予定）\" && exit 1"
+  }
+}
