@@ -123,10 +123,14 @@ input[type=range]{accent-color:#7ef29a}
               </div>
             </sc-if>
             <sc-if value="{{ d.isBoard }}" hint-placeholder-val="{{ false }}">
-              <div style="width:88px;height:32px;background:#dfe3f0;border:3px solid #241a10;box-shadow:inset 0 0 0 2px #b9bfd4;padding:6px 8px;box-sizing:border-box;display:flex;flex-direction:column;gap:4px">
-                <div style="height:2px;width:70%;background:#ff6b6b"></div>
-                <div style="height:2px;width:52%;background:#20304a"></div>
-                <div style="height:2px;width:62%;background:#5aa2ff"></div>
+              <div onMouseEnter="{{ onBoardEnter }}" onMouseLeave="{{ onBoardLeave }}" style="width:150px;height:44px;background:#eef0f8;border:3px solid #241a10;box-shadow:inset 0 0 0 2px #b9bfd4;padding:4px 7px;box-sizing:border-box;overflow:hidden;cursor:pointer">
+                <div style="font-size:8px;color:#d94f5c;border-bottom:1px solid #b9bfd4;margin-bottom:2px">実行中タスク</div>
+                <sc-for list="{{ boardLines }}" as="b" hint-placeholder-count="2">
+                  <div style="font-size:9px;line-height:1.2;color:#20304a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">・{{ b.txt }}</div>
+                </sc-for>
+                <sc-if value="{{ boardIdle }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size:9px;color:#8c93ad">（なし）</div>
+                </sc-if>
               </div>
             </sc-if>
             <sc-if value="{{ d.isVending }}" hint-placeholder-val="{{ false }}">
@@ -173,6 +177,21 @@ input[type=range]{accent-color:#7ef29a}
           </div>
         </sc-for>
 
+        <sc-if value="{{ boardHover }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:30;pointer-events:none;width:460px;background:#eef0f8;border:4px solid #241a10;box-shadow:8px 8px 0 #000;padding:16px 20px">
+            <div style="font-size:16px;color:#d94f5c;border-bottom:2px solid #b9bfd4;padding-bottom:6px;margin-bottom:10px">実行中タスク（ホワイトボード）</div>
+            <sc-for list="{{ boardAll }}" as="b" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:10px;padding:5px 0;font-size:14px;color:#20304a">
+                <div style="font-size:11px;color:{{ b.stateColor }};border:2px solid {{ b.stateColor }};background:#12152a;padding:2px 6px;flex-shrink:0">{{ b.stateLabel }}</div>
+                <div style="flex-shrink:0">{{ b.name }} <span style="color:#8c93ad;font-size:12px">({{ b.role }})</span></div>
+                <div style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ b.tool }}</div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ boardIdle }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:14px;color:#8c93ad">実行中のタスクはありません</div>
+            </sc-if>
+          </div>
+        </sc-if>
         <sc-if value="{{ hover.show }}" hint-placeholder-val="{{ false }}">
           <div style="position:absolute;left:{{ hover.x }}px;top:{{ hover.y }}px;z-index:20;pointer-events:none;background:#12152a;border:2px solid {{ hover.stateColor }};box-shadow:4px 4px 0 #000;padding:10px 12px;font-size:12px;line-height:1.7;min-width:190px">
             <div style="color:{{ hover.stateColor }};font-size:13px">{{ hover.name }} <span style="color:#9aa0b8">({{ hover.role }})</span></div>
@@ -311,12 +330,12 @@ class Component extends DCLogic {
         {name:'会議室',x:472,y:300,w:300,h:140,trigger:'サブエージェント作業スペース'},
         {name:'総務部',x:788,y:460,w:156,h:124,standby:true,trigger:'standby: ドア閉鎖・照明OFF'},
         {name:'受付',x:16,y:460,w:300,h:124,trigger:'依頼受付（秘書室）'}],
-       furniture:[{k:'desk',x:52,y:150},{k:'desk',x:172,y:150},{k:'desk',x:292,y:150},{k:'shelf',x:330,y:44},{k:'plant',x:404,y:210},{k:'desk',x:536,y:150},{k:'plant',x:648,y:210},{k:'desk',x:776,y:150},{k:'plant',x:896,y:210},{k:'table',x:556,y:352},{k:'board',x:590,y:308},{k:'server',x:408,y:52},{k:'desk',x:100,y:512},{k:'plant',x:270,y:520},{k:'vending',x:620,y:478},{k:'printer',x:700,y:498}]},
+       furniture:[{k:'desk',x:52,y:150},{k:'desk',x:172,y:150},{k:'desk',x:292,y:150},{k:'shelf',x:330,y:44},{k:'plant',x:404,y:210},{k:'desk',x:536,y:150},{k:'plant',x:648,y:210},{k:'desk',x:776,y:150},{k:'plant',x:896,y:210},{k:'table',x:556,y:352},{k:'board',x:566,y:304},{k:'server',x:408,y:52},{k:'desk',x:100,y:512},{k:'plant',x:270,y:520},{k:'vending',x:620,y:478},{k:'printer',x:700,y:498}]},
       comet:{label:'2F Comet Labs',rooms:[
         {name:'分析部',x:16,y:16,w:460,h:300,trigger:'集計 / 分析 / メトリクス'},
         {name:'編集部',x:500,y:16,w:444,h:300,trigger:'記事 / ドキュメント / 校正'},
         {name:'受付',x:16,y:380,w:300,h:190,trigger:'依頼受付（秘書室）'}],
-       furniture:[{k:'desk',x:108,y:170},{k:'desk',x:248,y:170},{k:'plant',x:400,y:250},{k:'desk',x:608,y:170},{k:'shelf',x:840,y:44},{k:'plant',x:880,y:250},{k:'desk',x:100,y:432},{k:'plant',x:270,y:470},{k:'server',x:400,y:52},{k:'board',x:640,y:40},{k:'vending',x:600,y:322},{k:'printer',x:236,y:420}]}
+       furniture:[{k:'desk',x:108,y:170},{k:'desk',x:248,y:170},{k:'plant',x:400,y:250},{k:'desk',x:608,y:170},{k:'shelf',x:840,y:44},{k:'plant',x:880,y:250},{k:'desk',x:100,y:432},{k:'plant',x:270,y:470},{k:'server',x:400,y:52},{k:'board',x:600,y:40},{k:'vending',x:600,y:322},{k:'printer',x:236,y:420}]}
     };
     this.BASE=[
       {id:'sec',floor:'nebula',name:'ミナト',role:'secretary',dept:'受付',model:'sonnet',color:'#ff9ecb',hair:'#f0c05a',x:112,y:462,session:'sess-f001',fem:true},
@@ -425,6 +444,12 @@ class Component extends DCLogic {
       isSettings:st.view==='settings',notSettings:st.view!=='settings',
       isReplay:st.view==='replay',isEditor:st.view==='editor',
       showSidebar:st.view==='office'||st.view==='replay',
+      boardLines:fchars.filter(c=>c.state!=='idle'&&c.tool&&c.tool!=='—').slice(0,3).map((c,i)=>({key:i,txt:c.name+': '+c.tool})),
+      boardAll:fchars.filter(c=>c.state!=='idle'&&c.tool&&c.tool!=='—').map((c,i)=>({key:i,name:c.name,role:c.role,tool:c.tool,stateLabel:S[c.state].l,stateColor:S[c.state].c})),
+      boardIdle:fchars.filter(c=>c.state!=='idle'&&c.tool&&c.tool!=='—').length===0,
+      boardHover:!!st.boardHover,
+      onBoardEnter:()=>this.setState({boardHover:true}),
+      onBoardLeave:()=>this.setState({boardHover:false}),
       rooms,furniture,chars,links,hover,sessions,waiting,log:st.log.map((e,i)=>({key:i,t:e.t,txt:e.txt})),
       sessionCount:fchars.length,hasWaiting:waitingAll.length>0,noWaiting:waitingAll.length===0,waitingCount:waitingAll.length,
       clockStr:this.timeStr(st.tick),
