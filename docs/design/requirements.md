@@ -5,7 +5,7 @@
 | 項目 | 内容 |
 |------|------|
 | ドキュメント種別 | 要件定義書 |
-| バージョン | 0.2.0（ループエンジニアリング反映: §1.1-4 / §5.4 / NFR-8） |
+| バージョン | 0.2.1（§5.4 に開発サイクル Skill /office-develop と office-qa 合格基準を追記） |
 | 作成日 | 2026-07-18 |
 | 開発リポジトリ | `ai-virtual-office`（新規・独立リポジトリ。`/company-spawn` で切り出し） |
 | ベースライン | [【設計ドキュメント 2026-07-17】](./architecture-design.md) / [【pixel-agents】](https://github.com/pixel-agents-hq/pixel-agents) / [【CC-SIer 要件定義 v0.3】](https://github.com/SAS-Sasao/cc-sier-organization/blob/main/docs/requirements.md) |
@@ -225,6 +225,7 @@ ai-virtual-office/
         ├── office-verify/          ← 停止条件スキル: scripts/verify.sh が exit code で合否（/goal の検証条件）
         ├── protocol-change/        ← 手順スキル: スキーマ変更 → 型再生成 → relay/web 両テスト
         ├── e2e-authoring/          ← 規約スキル: AI が Playwright E2E を書くためのルール集
+        ├── office-develop/         ← オーケストレータ: 設計→レビュー→実装(TDD)→レビュー→E2E→反映（/office-develop で明示起動）
         └── office-release/         ← 手順スキル: ビルド・タグ・（将来）Vercel デプロイ
 ```
 
@@ -238,7 +239,8 @@ ai-virtual-office/
 検証 hooks の初期セット: ① `game/` React 非依存ガード（PostToolUse）② 触ったパッケージの typecheck（PostToolUse）③ protocol 変更時の relay/web 両テストゲート（Stop）④ テスト弱体化ガード（Stop）⑤ E2E スモークゲート（Stop）。CLAUDE.md に書く規約は可能な限りこの検証 hooks に機械化し、文章規約はその補足とする。
 
 - **dogfooding**: 本リポジトリでの Claude Code 開発作業自体を自アプリで観測する（開発中の最良のテストデータになる）
-- **スキル運用規律**: 全 SKILL.md は本文より先に「ギャップ記録（スキル不在時の実失敗 3 件）」を書く。全面リライト禁止・差分編集のみ
+- **スキル運用規律**: 全 SKILL.md は本文より先に「ギャップ記録（スキル不在時の実失敗 3 件）」を書く。全面リライト禁止・差分編集のみ。Skill は `/{name}` のスラッシュコマンドで明示起動できる
+- **レビュー合格基準**: office-qa のレビューは 6 軸採点 + verdict JSON（composite ≥ 0.85 で pass、致命軸 < 0.5 で即 fail、リトライ 1 回 → 人間エスカレーション）で判定し、開発サイクル（/office-develop: 設計 → レビュー → 実装(TDD) → レビュー → E2E → 反映）の各レビューゲートで fail は前フェーズへループする（詳細:【ループエンジニアリング設計書】(./loop-engineering-design.md) §3.4 / §4.1）
 - **E2E 自動化**: Playwright + Debug State API（NFR-8）による状態ファースト検証。spec 生成 / 失敗修復 / フレーク退治の 3 ループを AI が担う（設計書 §5）
 - Subagent の分割は maker 4 領域（モジュール境界と一致）+ checker 1（maker-checker 分離）
 
