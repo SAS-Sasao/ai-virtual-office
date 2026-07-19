@@ -26,6 +26,7 @@
 |------|------|----------------|
 | 2026-07-18 | 初回コピー（spawn 時） | 646a417 |
 | 2026-07-19 | `requirements.md` を v0.2 に同期（ループエンジニアリング反映: §1.1-4 / NFR-8 / §5.4 / §11）、`loop-engineering-design.md` を新規コピー | 802bfc1 |
+| 2026-07-19 | `loop-engineering-design.md` を v0.2 に同期（§4.1 office-qa 合格基準 verdict JSON / §3.4 開発サイクル /office-develop / game パス表記を `apps/web/game/` に修正）、`requirements.md` を v0.2.1 に同期 | 439292f |
 
 ## 内容の変更について
 
