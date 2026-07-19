@@ -50,13 +50,18 @@ ai-virtual-office/
 ├── docs/
 │   └── design/                  ← 設計成果物（cc-sier からのコピー + origin.md）
 ├── .claude/
-│   └── agents/                  ← game-engine-dev / pipeline-dev / ui-dev / org-adapter-dev
+│   ├── agents/                  ← maker 4 種 + checker（office-qa）
+│   ├── rules/                   ← 拡張子・パス別の開発ルール（自動ロード）
+│   ├── hooks/verify/            ← 検証 hooks（B 系統。違反時 exit 2 でブロック）
+│   └── skills/                  ← office-verify / office-develop
 ├── pnpm-workspace.yaml
 ├── tsconfig.base.json
 └── CLAUDE.md（本ファイル）
 ```
 
 ## 開発規約
+
+**拡張子・パス別の詳細規約は `.claude/rules/` を正とする**（該当ファイルの Read/Edit 時に自動ロードされる。typescript / game-layer / tests / shell / markdown / config の 6 本）。以下は全体像の要約:
 
 1. **`apps/web/game/` は React に依存しない**ことを維持する。React API（`useState`/`useEffect`等）の import を持ち込まない。ゲーム状態は `OfficeState` クラス（`requestAnimationFrame` ループ）で管理し、React 側は参照渡し・イベント購読のみで連携する
 2. **`packages/protocol` が唯一のスキーマ正本**。`OfficeEvent` / `OfficeLayout` / `Character` の型変更時は必ず `packages/relay` と `apps/web` 両方の関連テストを実行してから完了とすること
