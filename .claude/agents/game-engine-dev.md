@@ -45,6 +45,7 @@ memory: project
 
 - `docs/design/requirements.md` FR-1（オフィス描画）/ FR-2（ライブ可視化）
 - `docs/design/architecture-design.md` §5（リポジトリ構成）/ §7（イベント→キャラ状態マッピング）
+- `docs/design/ui/`（UI/UX モック）— 状態別の色・吹き出し表現・部屋/家具/キャラの見た目・モーション値は README の抽出仕様を参照する（モックは DOM 実装だが、見た目仕様の正として扱い Canvas で再現する）
 
 ## メモリ活用
 状態機械の遷移パターン、経路探索の性能チューニング事例、React 分離を維持するための実装上の工夫をエージェントメモリに蓄積すること。
