@@ -16,8 +16,16 @@
 | `docs/design/architecture-design.md` | `.companies/domain-tech-collection/docs/research/ai-virtual-office-design.md` | 2026-07-17 |
 | `docs/design/aws-architecture.drawio` | `docs/diagrams/ai-virtual-office-aws.drawio` | 2026-07-18 |
 | `docs/design/aws-architecture.cfn.yaml` | `docs/diagrams/ai-virtual-office-aws.yaml` | 2026-07-18 |
+| `docs/design/loop-engineering-design.md` | `.companies/domain-tech-collection/docs/research/ai-virtual-office-loop-engineering-design.md` | 2026-07-19 |
 
 公開図（cc-sier-organization 側、GitHub Pages 配信）: https://sas-sasao.github.io/cc-sier-organization/diagrams/ai-virtual-office-aws.html
+
+## 更新履歴
+
+| 日付 | 内容 | コピー元コミット |
+|------|------|----------------|
+| 2026-07-18 | 初回コピー（spawn 時） | 646a417 |
+| 2026-07-19 | `requirements.md` を v0.2 に同期（ループエンジニアリング反映: §1.1-4 / NFR-8 / §5.4 / §11）、`loop-engineering-design.md` を新規コピー | 802bfc1 |
 
 ## 内容の変更について
 
@@ -27,6 +35,13 @@
 - cc-sier-organization 内部への相対リンク（`../../../../docs/requirements.md`）→ GitHub 絶対 URL（`https://github.com/SAS-Sasao/cc-sier-organization/blob/main/docs/requirements.md`）
 
 `architecture-design.md` および 2 つの図ファイルは無修正でコピーした。
+
+`loop-engineering-design.md`（2026-07-19 追加）も同じ方針でリンクのみ修正した（本文内容は無変更）:
+
+- `./ai-virtual-office-requirements.md` → `./requirements.md`
+- `./ai-virtual-office-design.md` → `./architecture-design.md`
+
+同日の `requirements.md` v0.2 同期では上記に加え `./ai-virtual-office-loop-engineering-design.md` → `./loop-engineering-design.md` を適用した。
 
 ## 更新ルール
 
