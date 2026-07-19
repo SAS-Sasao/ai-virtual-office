@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm install)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm --filter *)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm typecheck:*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/verify/guard-game-react.sh"
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/verify/typecheck-touched.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
