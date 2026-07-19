@@ -22,6 +22,35 @@ Claude Code のエージェント活動を、CC-SIer 仮想組織のピクセル
 
 現時点では開発準備中です（M0 PoC 未着手）。設計内容は `docs/design/` を参照してください。
 
+```bash
+# 前提: Node 20+。pnpm は corepack で有効化する（packageManager: pnpm@9.0.0 準拠）
+corepack enable && corepack prepare pnpm@9.0.0 --activate
+pnpm install
+```
+
+## 開発ワークフロー（Claude Code）
+
+本リポジトリは Claude Code での開発を前提に、`.claude/` に検証ループ一式を備えています（設計の正本: [docs/design/loop-engineering-design.md](docs/design/loop-engineering-design.md)）。
+
+### 開発を開始するとき
+
+| コマンド / 呼び出し | 用途 |
+|---|---|
+| `/office-develop` | **機能開発の標準サイクル**。設計 → 設計レビュー → 実装（TDD）→ 実装レビュー → E2E → PR 反映の 6 フェーズを統合実行する。機能追加・改修はまずこれを使う |
+| `/office-verify` | **機械的な動作確認**。`scripts/verify.sh` を実行し exit code で合否判定（目視判断を挟まない停止条件） |
+| 「レビューして」「検証して」「QA」 | 検証専任 subagent **office-qa** が起動し、6 軸採点の verdict JSON で合否を返す（Write/Edit を持たない checker） |
+
+実装は担当モジュールの maker subagent（`game-engine-dev` / `pipeline-dev` / `ui-dev` / `org-adapter-dev`）に委譲される。
+
+### 自動で走る検証 hooks（B 系統 = 違反時にブロックする仕様）
+
+Edit / Write のたびに PostToolUse で以下が実行される。exit 2 でブロックされたら stderr の指示に従って修正する:
+
+- `guard-game-react.sh` — `apps/web/game/` への react / react-dom / next import を検出（NFR-7: game 層の React 非依存）
+- `typecheck-touched.sh` — 編集した .ts / .tsx の所属パッケージに `tsc --noEmit`（緊急時は `AI_OFFICE_SKIP_TYPECHECK=1` でスキップ可。CI では全量 typecheck が走る）
+
+Stop hooks（protocol 両系テスト / テスト弱体化ガード / E2E スモーク）は対象成立後に導入予定（設計書 §2.3）。
+
 ## ロードマップ
 
 - **M0: PoC** — hooks → ingest → SSE → 最小描画（実セッションの変化が 1 秒以内に画面へ反映される）
