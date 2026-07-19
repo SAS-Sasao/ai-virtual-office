@@ -28,6 +28,8 @@ corepack enable && corepack prepare pnpm@9.0.0 --activate
 pnpm install
 ```
 
+環境の検証・構築を Claude Code に任せる場合は [docs/dev-environment.md](docs/dev-environment.md)（AI 指示書。マイルストーン別の要否と現状ギャップを整理）を読ませて実行させる。
+
 ## 開発ワークフロー（Claude Code）
 
 本リポジトリは Claude Code での開発を前提に、`.claude/` に検証ループ一式を備えています（設計の正本: [docs/design/loop-engineering-design.md](docs/design/loop-engineering-design.md)）。
