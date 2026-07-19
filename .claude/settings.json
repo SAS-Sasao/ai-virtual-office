@@ -5,6 +5,7 @@
       "Bash(pnpm build:*)",
       "Bash(pnpm test:*)",
       "Bash(pnpm --filter *)",
+      "Bash(pnpm exec playwright *)",
       "Bash(pnpm lint:*)",
       "Bash(pnpm typecheck:*)"
     ]
