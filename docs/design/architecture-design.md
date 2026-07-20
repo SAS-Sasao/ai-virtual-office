@@ -1,6 +1,7 @@
 # AI 仮想オフィス 構築設計ドキュメント
 
 > 作成日: 2026-07-17 | 作成者: SAS-Sasao（秘書室 direct）| ステータス: draft
+> 更新: 2026-07-20 — フロントモック v3 の取り込みに伴い **§5.1 オフィス描画のレイヤー構成**を新設（[ADR-002](./decision-log.md)）
 > 参考: [【pixel-agents-hq/pixel-agents】](https://github.com/pixel-agents-hq/pixel-agents) / [【Zenn: Pixel Agents 紹介記事】](https://zenn.dev/and_dot/articles/d987d07720929430)
 
 ## 1. 目的とスコープ
@@ -119,14 +120,14 @@ ai-virtual-office/
 │       │   ├── office-state.ts       ← OfficeState（キャラ・家具・部屋）
 │       │   ├── state-machine.ts      ← idle/walk/type/read/waiting 遷移
 │       │   ├── pathfinding.ts        ← BFS（タイルグリッド）
-│       │   ├── renderer.ts           ← Canvas 2D 描画・整数ズーム
-│       │   └── sprites/              ← スプライトシート定義
+│       │   ├── renderer.ts           ← Canvas 2D 描画・整数ズーム（レイヤー順は §5.1）
+│       │   └── sprites/              ← スプライトシート定義（PNG + フレーム定義）
 │       ├── db/                 ← Drizzle スキーマ + SQLite/Postgres 接続
 │       └── public/assets/      ← ピクセルアート素材（ライセンス表記必須）
 ├── packages/
 │   ├── protocol/               ← Zod イベントスキーマ（Relay/Web で共有）
 │   │   ├── src/events.ts       ← OfficeEvent 型（正規化済みイベント）
-│   │   └── src/layout.ts       ← OfficeLayout / Character 型（間取り・住人定義）
+│   │   └── src/layout.ts       ← OfficeLayout / Character 型（間取り・住人定義・任意の backdrop）
 │   ├── relay/                  ← ローカル常駐 CLI（npx ai-office-relay）
 │   │   └── src/
 │   │       ├── server.ts       ← POST /hooks/:sessionId 受信
@@ -150,6 +151,28 @@ ai-virtual-office/
 - **`apps/web/game/` は React に依存させない**。ここが資産の核で、テスト可能・移植可能に保つ
 - **`packages/protocol` が唯一の真実**。Claude Code の生 hooks JSON を UI まで持ち込まず、Relay で正規化して境界を切る
 - リプレイモードは「OfficeEvent の配列を時刻順に流す」だけで実装できるよう、ライブ/リプレイ共通のイベント消費インターフェースにする
+- **オフィスの見た目は手続き描画が正**。フロア背景の一枚絵は任意の装飾レイヤーに留める（§5.1 / ADR-002）
+
+### 5.1 オフィス描画のレイヤー構成
+
+フロントモック v3（2026-07-20）は一枚絵背景 + PNG スプライトへ移行したが、**実装はそれをそのまま採らない**。一枚絵に全面移行すると FR-3（マスタからの間取り生成）と FR-6（エディタでの家具配置）が成立せず、BFS の通行可否も画像から復元できないため。決定の経緯は [ADR-002](./decision-log.md) を参照。
+
+`renderer.ts` の描画順:
+
+| z | レイヤー | 生成元 | 必須 |
+|---|---|---|---|
+| 0 | `backdrop`（フロア一枚絵） | 手描き素材。`OfficeLayout.backdrop` で任意指定 | 任意 |
+| 1 | 床・壁・部屋 | `OfficeLayout`（cc-sier-adapter がマスタから生成） | **必須** |
+| 2 | 家具 | `OfficeLayout.furniture`（エディタで編集・`custom` フラグ） | **必須** |
+| 3 | キャラクター | PNG スプライトシート + 状態機械 | **必須** |
+| 4 | オーバーレイ（吹き出し・サブエージェントのリンク線・ホバーカード・ホワイトボード拡大） | ランタイム状態 | **必須** |
+
+不変条件:
+
+- **レイヤー 1〜2 のデータは `backdrop` の有無にかかわらず常に存在する**。当たり判定・経路探索・エディタはこのデータのみを参照し、背景画像を参照しない
+- `backdrop` 指定時はレイヤー 1〜2 を簡略描画に落としてよい（部屋の枠線・名前プレートは残す）が、**`backdrop` 未指定でも単体で成立する見た目**を維持する
+- `backdrop` の座標系は `OfficeLayout` のタイルグリッドに一致させる（`cover` によるスケール差を持ち込まない）
+- 素材は CC0 / CC-BY 系のみ（NFR-6）。モックの `sprites/*.png` / `uploads/*.png` はプレースホルダーであり流用しない
 
 ## 6. Claude Code 側に必要な設定
 
