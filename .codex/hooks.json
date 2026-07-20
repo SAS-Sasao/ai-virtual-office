@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'\\\\wsl.localhost\\Ubuntu-22.04\\home\\toyoki05\\ai-virtual-office\\.codex\\hooks\\verify/guard-game-react.sh'"
+          },
+          {
+            "type": "command",
+            "command": "'\\\\wsl.localhost\\Ubuntu-22.04\\home\\toyoki05\\ai-virtual-office\\.codex\\hooks\\verify/typecheck-touched.sh'"
+          }
+        ]
+      }
+    ]
+  }
+}
