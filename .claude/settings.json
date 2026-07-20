@@ -11,6 +11,37 @@
     ]
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
@@ -22,6 +53,55 @@
           {
             "type": "command",
             "command": ".claude/hooks/verify/typecheck-touched.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
           }
         ]
       }

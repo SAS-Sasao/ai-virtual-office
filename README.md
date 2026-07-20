@@ -20,8 +20,6 @@ Claude Code のエージェント活動を、CC-SIer 仮想組織のピクセル
 
 ## セットアップ
 
-現時点では開発準備中です（M0 PoC 未着手）。設計内容は `docs/design/` を参照してください。
-
 ```bash
 # 前提: Node 20+。pnpm は corepack で有効化する（packageManager: pnpm@9.0.0 準拠）
 corepack enable && corepack prepare pnpm@9.0.0 --activate
@@ -29,6 +27,36 @@ pnpm install
 ```
 
 環境の検証・構築を Claude Code に任せる場合は [docs/dev-environment.md](docs/dev-environment.md)（AI 指示書。マイルストーン別の要否と現状ギャップを整理）を読ませて実行させる。
+
+## 起動とローカルアクセス（M0 PoC）
+
+```bash
+pnpm dev   # apps/web を http://localhost:3001 で起動（next dev -p 3001）
+```
+
+- **アクセス方法（本開発環境 = WSL2 Ubuntu 22.04）**: WSL2 の localhost フォワーディングにより、**Windows 側のブラウザから `http://localhost:3001`** を開く。WSL 内からの疎通確認は `curl -s http://localhost:3001/`
+- **ポートが 3000 でない理由**: 本環境ではポート 3000 を WSL 外の別プロセスが占有しているため、3001 に固定している（`apps/web/package.json` の dev script）。変更する場合は `.claude/settings.json` の観測 hooks の URL も揃えること
+- 画面には実セッションのキャラ（正方形）が状態色で表示される。イベントが無い間は空のオフィスのみ
+
+### イベントを手動注入して動作確認する
+
+サーバ起動中に別ターミナルから:
+
+```bash
+# ツール実行イベントを注入（キャラが出現し「編集」色 #7ef29a になる）
+curl -s -X POST http://localhost:3001/api/ingest \
+  -H 'Content-Type: application/json' \
+  -d '{"hook_event_name":"PreToolUse","session_id":"demo-1","tool_name":"Edit","tool_input":{"file_path":"/tmp/demo.ts"}}'
+
+# SSE ストリームを直接覗く（別ターミナルで）
+curl -N http://localhost:3001/api/stream
+```
+
+### 実セッションの観測（dogfooding）
+
+本リポジトリの `.claude/settings.json` には観測 hooks（A 系統・`#ai-office` マーカー付き）が配線済みで、**このリポジトリで Claude Code を使うと自動で `http://localhost:3001/api/ingest` にイベントが飛ぶ**（サーバ停止中は `--max-time 2 || true` で無害に失敗し、Claude Code を一切ブロックしない = NFR-2）。設定変更後の hooks はセッション再起動で有効になる。
+
+> 注: 観測 hooks（A 系統・インライン curl）は要件 §5.2 準拠。`.claude/hooks/verify/*.sh` を呼ぶ検証 hooks（B 系統・違反時にブロック）とは別系統であり、`.claude/rules/shell.md` の系統区別を参照。
 
 ## 開発ワークフロー（Claude Code）
 

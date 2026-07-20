@@ -22,15 +22,15 @@ description: >
 1. リポジトリルートで検証スクリプトを実行する:
 
    ```bash
-   bash .claude/skills/office-verify/scripts/verify.sh
+   bash .Codex/skills/office-verify/scripts/verify.sh
    ```
 
 2. **exit 0 = 合格 / 非 0 = 不合格**。不合格時は stderr の失敗ステップを修正し、再実行する。目視での「動いていそう」判断で合格扱いにしない。
 
-## 現時点の検証範囲（M0 版）
+## 現時点の検証範囲（M0 骨格版）
 
 - pnpm / `pnpm install` の成否確認
-- 各 workspace パッケージに `build` / `typecheck` / `test` スクリプトが定義されていれば実行（M0 で web の vitest が機械ゲートに載った）
+- 各 workspace パッケージに `build` / `typecheck` スクリプトが定義されていれば実行
 
 以下は **M1 で実装**（verify.sh 内に TODO 明記済み。未実装ステップは合否に含めない）:
 
