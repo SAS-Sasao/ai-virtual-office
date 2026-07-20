@@ -2,7 +2,15 @@ import { Hono } from "hono";
 import { OfficeEventSchema, type OfficeEvent } from "@ai-office/protocol";
 import { normalizeHookEvent } from "./normalize.js";
 import { createSeqCounter } from "./seq.js";
-import type { Forwarder } from "./forward.js";
+
+/**
+ * 正規化済み OfficeEvent を下流（web の /api/ingest、または再送バッファ）へ
+ * 引き渡す関数。server 層は成否を気にしない（成否判定・再送は
+ * src/buffer.ts の RetryBuffer#send の責務）。呼べば必ず解決することを期待する
+ * 契約であり、実運用では cli.ts が RetryBuffer#send をここに注入する。
+ * 独自実装が万一 throw しても /hooks ハンドラ側で保険の try/catch を行う（NFR-2）。
+ */
+export type EventSink = (event: OfficeEvent) => Promise<void>;
 
 /**
  * `/hooks/:event` で受理する既知のパス（アーキ設計 §6.1 の hooks イベント設計）。
@@ -23,11 +31,15 @@ const HOOK_EVENT_SLUGS = new Set([
 
 export interface CreateServerOptions {
   /** 正規化済み OfficeEvent を web の /api/ingest 等へ転送する関数（DI）。 */
-  forward: Forwarder;
+  forward: EventSink;
   /** 現在時刻を返す関数（DI、テストの決定論性のため既定は Date.now）。 */
   now?: () => number;
-  /** seq 採番関数（DI、既定は 0 起点の createSeqCounter）。 */
-  nextSeq?: () => number;
+  /**
+   * seq 採番関数（DI、既定は 0 起点の createSeqCounter）。永続採番
+   * （createPersistentSeqCounter）は読み書き失敗時に `undefined` を返し得る。
+   * その場合はイベントに seq を付与しない（消費側は ts 昇順にフォールバックする）。
+   */
+  nextSeq?: () => number | undefined;
   /** true のとき /test/inject を有効化する（既定 false）。 */
   testMode?: boolean;
   /** GET /health が返す version 文字列。 */

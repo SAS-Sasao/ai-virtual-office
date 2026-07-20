@@ -4,3 +4,6 @@
 - [m1-1-protocol-extraction](project_m1_1_protocol_extraction.md) — packages/protocol 新規作成: dist公開の理由(N1)・CharacterStateSchema統一・seq順序規約・未知キーstrip検証法
 - [m1-1-relay-creation](project_m1_1_relay_creation.md) — packages/relay 新規作成: NFR-2実機検証(web未起動でも200)・--port0のgetPort DIパターン・dist/cli.jsのchmod+x未実施・inject全件検証
 - [m1-1-web-adapt](project_m1_1_web_adapt.md) — apps/web追従: typecheck-touchedフックとBash/Edit使い分け・NEXT_DIST_DIR副作用(tsconfig.json/next-env.d.ts自動書換)・vitest include漏れ注意
+- [m1-2a-relay-persistence](project_m1_2a_relay_persistence.md) — relay永続化: forward契約変更をEventSink分離で吸収・seqブロック予約のENOENT区別と自己回復・buffer再送のsleep無しテスト技法
+- [m1-2a-web-db-persistence](project_m1_2a_web_db_persistence.md) — web/db永続化: .js拡張子はnext buildでのみ検出される罠・NEXT_DIST_DIR副作用の後始末・prune-on-init設計
+- [m1-2a-phase3-review-fixes](project_m1_2a_phase3_review_fixes.md) — buffer.ts drain再入修正・events.ts順序規則再実装・next buildが本番DBを汚す未対応の発見

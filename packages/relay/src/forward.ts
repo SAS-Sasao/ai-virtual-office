@@ -1,6 +1,14 @@
 import type { OfficeEvent } from "@ai-office/protocol";
 
-export type Forwarder = (event: OfficeEvent) => Promise<void>;
+/**
+ * 成否を戻り値で返す転送関数。
+ *
+ * NFR-2: 転送失敗（ネットワークエラー・非 2xx 応答のいずれも含む）でも
+ * 絶対に throw しない。成功（2xx）なら true、失敗なら false を返す。
+ * 呼び出し側（src/buffer.ts の RetryBuffer）はこの戻り値だけを見て
+ * 再送要否を判断できる。
+ */
+export type Forwarder = (event: OfficeEvent) => Promise<boolean>;
 
 export interface CreateForwarderOptions {
   /** 転送先 URL（例: web の /api/ingest）。 */
@@ -19,7 +27,7 @@ export interface CreateForwarderOptions {
 export function createForwarder(options: CreateForwarderOptions): Forwarder {
   const { url, fetchImpl = globalThis.fetch } = options;
 
-  return async (event: OfficeEvent): Promise<void> => {
+  return async (event: OfficeEvent): Promise<boolean> => {
     try {
       const res = await fetchImpl(url, {
         method: "POST",
@@ -28,9 +36,12 @@ export function createForwarder(options: CreateForwarderOptions): Forwarder {
       });
       if (!res.ok) {
         console.warn(`relay: forward to ${url} responded with status ${res.status}`);
+        return false;
       }
+      return true;
     } catch (err) {
       console.warn(`relay: forward to ${url} failed`, err);
+      return false;
     }
   };
 }
