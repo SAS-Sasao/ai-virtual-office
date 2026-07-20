@@ -1,0 +1,3 @@
+- [normalize-whitelist-pattern](feedback_normalize_whitelist_pattern.md) — normalizeHookEvent はホワイトリスト方式必須。ブラックリスト delete 方式は禁止
+- [hooks-normalize-test-cases](project_hooks_normalize_test_cases.md) — normalize.test.ts に必須の機微漏洩検出ケース一覧（M0 で確立）
+- [ingest-stream-reliability-m0](project_ingest_stream_reliability.md) — ingest 常時200・bus.ts globalThis シングルトン理由・SSE ヘッダ設定の判断根拠

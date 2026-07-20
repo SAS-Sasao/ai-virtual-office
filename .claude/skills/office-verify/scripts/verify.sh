@@ -26,14 +26,14 @@ if ! pnpm install; then
   exit 1
 fi
 
-# --- Step 2: 各 workspace パッケージの build / typecheck ----------------------
+# --- Step 2: 各 workspace パッケージの build / typecheck / test ---------------
 # パッケージに該当スクリプトが定義されている場合のみ実行する（骨格状態では 0 件で通過）
 ran=0
 for manifest in apps/*/package.json packages/*/package.json; do
   [[ -f "$manifest" ]] || continue
   pkg_name=$(jq -r '.name // empty' "$manifest")
   [[ -n "$pkg_name" ]] || continue
-  for script in build typecheck; do
+  for script in build typecheck test; do
     if [[ "$(jq -r --arg s "$script" '.scripts[$s] // empty' "$manifest")" != "" ]]; then
       echo "[step] pnpm --filter $pkg_name run $script"
       ran=$((ran + 1))
@@ -45,7 +45,7 @@ for manifest in apps/*/package.json packages/*/package.json; do
   done
 done
 if [[ "$ran" -eq 0 ]]; then
-  echo "[note] build/typecheck を定義した workspace パッケージがまだ無い（M0 骨格状態）"
+  echo "[note] build/typecheck/test を定義した workspace パッケージがまだ無い（骨格状態）"
 fi
 
 # --- Step 3 以降: M1 で実装 ---------------------------------------------------
