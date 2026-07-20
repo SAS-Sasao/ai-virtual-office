@@ -11,65 +11,65 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
 <style>
-body{margin:0;background:#141017}
-a{color:#e8c98a}a:hover{color:#7ef29a}
+body{margin:0;background:#0b0d18}
+a{color:#6be5ff}a:hover{color:#7ef29a}
 @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
 @keyframes blink{0%,49%{opacity:1}50%,100%{opacity:.25}}
 @keyframes pulse{0%,100%{opacity:.9}50%{opacity:.5}}
-input[type=range]{accent-color:#d9a441}
+input[type=range]{accent-color:#7ef29a}
 </style>
 </helmet>
-<div style="min-height:100vh;background:#141017;color:#efe6d6;font-family:'DotGothic16',monospace;display:flex;flex-direction:column">
-  <div style="display:flex;align-items:center;gap:14px;padding:10px 20px;background:#241a10;border-bottom:4px solid #3a2415">
-    <div style="background:#d9a441;color:#241a10;padding:5px 12px;font-size:14px;letter-spacing:1px;box-shadow:3px 3px 0 #000;white-space:nowrap">AI VIRTUAL OFFICE</div>
+<div style="min-height:100vh;background:#0b0d18;color:#e8eaf6;font-family:'DotGothic16',monospace;display:flex;flex-direction:column">
+  <div style="display:flex;align-items:center;gap:14px;padding:10px 20px;background:#12152a;border-bottom:3px solid #2a3050">
+    <div style="background:#7ef29a;color:#0b0d18;padding:5px 12px;font-size:14px;letter-spacing:1px;box-shadow:3px 3px 0 #000">AI VIRTUAL OFFICE</div>
     <div style="display:flex;gap:6px">
       <sc-for list="{{ floorTabs }}" as="f" hint-placeholder-count="2">
-        <button onClick="{{ f.onClick }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:13px;cursor:pointer;padding:6px 12px;background:{{ f.bg }};color:{{ f.fg }};border:2px solid #3a2415;box-shadow:2px 2px 0 #000">{{ f.label }}</button>
+        <button onClick="{{ f.onClick }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:13px;cursor:pointer;padding:6px 12px;background:{{ f.bg }};color:{{ f.fg }};border:2px solid #2a3050;box-shadow:2px 2px 0 #000">{{ f.label }}</button>
       </sc-for>
     </div>
-    <div style="width:2px;height:26px;background:#3a2415"></div>
+    <div style="width:2px;height:26px;background:#2a3050"></div>
     <div style="display:flex;gap:6px">
       <sc-for list="{{ viewTabs }}" as="t" hint-placeholder-count="4">
-        <button onClick="{{ t.onClick }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:13px;cursor:pointer;padding:6px 12px;background:{{ t.bg }};color:{{ t.fg }};border:2px solid #3a2415;box-shadow:2px 2px 0 #000">{{ t.label }}</button>
+        <button onClick="{{ t.onClick }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:13px;cursor:pointer;padding:6px 12px;background:{{ t.bg }};color:{{ t.fg }};border:2px solid #2a3050;box-shadow:2px 2px 0 #000">{{ t.label }}</button>
       </sc-for>
     </div>
     <div style="flex:1"></div>
     <sc-if value="{{ hasWaiting }}" hint-placeholder-val="{{ true }}">
-      <div style="background:#ffd166;color:#241a10;padding:5px 10px;font-size:13px;box-shadow:2px 2px 0 #000;animation:blink 1.2s steps(2) infinite;white-space:nowrap">許可待ち {{ waitingCount }}</div>
+      <div style="background:#ffd166;color:#0b0d18;padding:5px 10px;font-size:13px;box-shadow:2px 2px 0 #000;animation:blink 1.2s steps(2) infinite">許可待ち {{ waitingCount }}</div>
     </sc-if>
-    <div style="font-size:13px;color:#b39b78">{{ clockStr }}</div>
-    <button onClick="{{ toggleSound }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:13px;cursor:pointer;padding:5px 10px;background:#241a10;color:#efe6d6;border:2px solid #3a2415;box-shadow:2px 2px 0 #000">♪ {{ soundLabel }}</button>
+    <div style="font-size:13px;color:#9aa0b8">{{ clockStr }}</div>
+    <button onClick="{{ toggleSound }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:13px;cursor:pointer;padding:5px 10px;background:#12152a;color:#e8eaf6;border:2px solid #2a3050;box-shadow:2px 2px 0 #000">♪ {{ soundLabel }}</button>
   </div>
 
   <sc-if value="{{ notSettings }}" hint-placeholder-val="{{ true }}">
   <div style="display:flex;flex:1;gap:16px;padding:16px 20px;align-items:flex-start;justify-content:center">
 
     <sc-if value="{{ isEditor }}" hint-placeholder-val="{{ false }}">
-      <div style="width:190px;background:#241a10;border:3px solid #3a2415;box-shadow:4px 4px 0 #000;padding:12px;display:flex;flex-direction:column;gap:8px">
-        <div style="font-size:14px;color:#d9a441;margin-bottom:4px">パレット</div>
+      <div style="width:190px;background:#12152a;border:3px solid #2a3050;box-shadow:4px 4px 0 #000;padding:12px;display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:14px;color:#7ef29a;margin-bottom:4px">パレット</div>
         <sc-for list="{{ palette }}" as="p" hint-placeholder-count="5">
-          <button onClick="{{ p.onClick }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:13px;cursor:pointer;text-align:left;padding:7px 10px;background:{{ p.bg }};color:{{ p.fg }};border:2px solid #3a2415;box-shadow:2px 2px 0 #000">{{ p.label }}</button>
+          <button onClick="{{ p.onClick }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:13px;cursor:pointer;text-align:left;padding:7px 10px;background:{{ p.bg }};color:{{ p.fg }};border:2px solid #2a3050;box-shadow:2px 2px 0 #000">{{ p.label }}</button>
         </sc-for>
-        <div style="font-size:12px;color:#b39b78;margin-top:8px">選択中: {{ edToolLabel }}</div>
-        <button style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:13px;cursor:pointer;padding:8px;background:#7ef29a;color:#241a10;border:2px solid #3a2415;box-shadow:2px 2px 0 #000;margin-top:6px">レイアウトを保存</button>
-        <div style="font-size:11px;color:#8a7458;line-height:1.6">配置した家具は custom フラグ付きで JSON に保存されます</div>
+        <div style="font-size:12px;color:#9aa0b8;margin-top:8px">選択中: {{ edToolLabel }}</div>
+        <button style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:13px;cursor:pointer;padding:8px;background:#7ef29a;color:#0b0d18;border:2px solid #2a3050;box-shadow:2px 2px 0 #000;margin-top:6px">レイアウトを保存</button>
+        <div style="font-size:11px;color:#6a7194;line-height:1.6">配置した家具は custom フラグ付きで JSON に保存されます</div>
       </div>
     </sc-if>
 
     <div style="display:flex;flex-direction:column;gap:12px">
       <sc-if value="{{ isReplay }}" hint-placeholder-val="{{ false }}">
-        <div style="display:flex;align-items:center;gap:12px;background:#241a10;border:3px solid #3a2415;box-shadow:4px 4px 0 #000;padding:10px 14px;width:932px">
-          <button onClick="{{ togglePlay }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:13px;cursor:pointer;padding:6px 14px;background:#d9a441;color:#241a10;border:2px solid #3a2415;box-shadow:2px 2px 0 #000">{{ playLabel }}</button>
-          <select style="font-family:inherit;font-size:13px;background:#141017;color:#efe6d6;border:2px solid #3a2415;padding:5px 8px">
+        <div style="display:flex;align-items:center;gap:12px;background:#12152a;border:3px solid #2a3050;box-shadow:4px 4px 0 #000;padding:10px 14px;width:932px">
+          <button onClick="{{ togglePlay }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:13px;cursor:pointer;padding:6px 14px;background:#7ef29a;color:#0b0d18;border:2px solid #2a3050;box-shadow:2px 2px 0 #000">{{ playLabel }}</button>
+          <select style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:13px;background:#0b0d18;color:#e8eaf6;border:2px solid #2a3050;padding:5px 8px">
             <option>2026-07-17 (daily-digest)</option>
             <option>2026-07-16</option>
             <option>2026-07-15</option>
           </select>
           <input type="range" min="0" max="{{ replayMax }}" value="{{ replayPos }}" onChange="{{ onSeek }}" style="flex:1">
-          <div style="font-size:13px;color:#b39b78;min-width:52px">{{ replayPos }} / {{ replayMax }}</div>
+          <div style="font-size:13px;color:#9aa0b8;min-width:52px">{{ replayPos }} / {{ replayMax }}</div>
           <div style="display:flex;gap:4px">
             <sc-for list="{{ speedTabs }}" as="s" hint-placeholder-count="3">
-              <button onClick="{{ s.onClick }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:12px;cursor:pointer;padding:5px 9px;background:{{ s.bg }};color:{{ s.fg }};border:2px solid #3a2415;box-shadow:2px 2px 0 #000">{{ s.label }}</button>
+              <button onClick="{{ s.onClick }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:12px;cursor:pointer;padding:5px 9px;background:{{ s.bg }};color:{{ s.fg }};border:2px solid #2a3050;box-shadow:2px 2px 0 #000">{{ s.label }}</button>
             </sc-for>
           </div>
         </div>
@@ -78,48 +78,31 @@ input[type=range]{accent-color:#d9a441}
         <div style="background:#3a3212;border:2px solid #ffd166;color:#ffd166;font-size:12px;padding:8px 12px;width:936px;box-sizing:border-box">! マスタ生成領域は再インポートで初期化されます（custom フラグ領域のみ永続）</div>
       </sc-if>
 
-      <div style="position:relative;width:960px;height:600px;background:repeating-linear-gradient(90deg,#7a4e30 0 26px,#734928 26px 28px);border:4px solid #241a10;box-shadow:6px 6px 0 #000;overflow:hidden">
-        <div style="position:absolute;left:0;top:0;width:960px;height:64px;background:#5a3a26 repeating-linear-gradient(90deg,transparent 0 46px,rgba(0,0,0,.18) 46px 48px);border-bottom:5px solid #3a2415;box-sizing:border-box">
-          <div style="position:absolute;left:24px;top:10px;width:110px;height:40px;background:#4a2f1e;border:3px solid #241a10;padding:4px;box-sizing:border-box;display:flex;gap:2px;align-items:flex-end">
-            <div style="width:7px;height:22px;background:#b5514a"></div><div style="width:7px;height:18px;background:#5a8f6d"></div><div style="width:7px;height:24px;background:#c98f3c"></div><div style="width:7px;height:16px;background:#5a6d9e"></div><div style="width:7px;height:21px;background:#8a5a9e"></div><div style="width:7px;height:19px;background:#b5514a"></div><div style="width:7px;height:23px;background:#5a8f6d"></div>
-          </div>
-          <div style="position:absolute;left:150px;top:10px;width:110px;height:40px;background:#4a2f1e;border:3px solid #241a10;padding:4px;box-sizing:border-box;display:flex;gap:2px;align-items:flex-end">
-            <div style="width:7px;height:20px;background:#c98f3c"></div><div style="width:7px;height:24px;background:#5a6d9e"></div><div style="width:7px;height:17px;background:#b5514a"></div><div style="width:7px;height:22px;background:#5a8f6d"></div><div style="width:7px;height:19px;background:#8a5a9e"></div><div style="width:7px;height:23px;background:#c98f3c"></div>
-          </div>
-          <div style="position:absolute;left:50%;top:14px;transform:translateX(-50%);background:#241a10;border:3px solid #d9a441;color:#e8c98a;font-size:15px;letter-spacing:3px;padding:6px 22px;white-space:nowrap">{{ floorSign }}</div>
-          <div style="position:absolute;left:700px;top:14px;width:30px;height:30px;background:#e8e0cc;border:3px solid #241a10;box-sizing:border-box">
-            <div style="position:absolute;left:11px;top:4px;width:2px;height:9px;background:#241a10"></div>
-            <div style="position:absolute;left:11px;top:11px;width:7px;height:2px;background:#241a10"></div>
-          </div>
-          <div style="position:absolute;left:790px;top:10px;width:110px;height:40px;background:#4a2f1e;border:3px solid #241a10;padding:4px;box-sizing:border-box;display:flex;gap:2px;align-items:flex-end">
-            <div style="width:7px;height:23px;background:#5a8f6d"></div><div style="width:7px;height:18px;background:#c98f3c"></div><div style="width:7px;height:21px;background:#b5514a"></div><div style="width:7px;height:24px;background:#5a6d9e"></div><div style="width:7px;height:17px;background:#8a5a9e"></div>
-          </div>
-        </div>
-
+      <div style="position:relative;width:960px;height:540px;background:#0b0d18;border:3px solid #2a3050;box-shadow:6px 6px 0 #000;overflow:hidden">
+        <div style="{{ floorLayerStyle }}"></div>
+        <sc-if value="{{ showCss }}" hint-placeholder-val="{{ false }}">
         <sc-for list="{{ rooms }}" as="r" hint-placeholder-count="6">
-          <div title="{{ r.tooltip }}" style="position:absolute;left:{{ r.x }}px;top:{{ r.y }}px;width:{{ r.w }}px;height:{{ r.h }}px;background:{{ r.bg }};border:5px solid #3a2415;box-shadow:inset 0 0 0 3px rgba(255,255,255,.05);box-sizing:border-box">
-            <div style="position:absolute;top:-4px;left:-4px;background:#3a2415;color:#e8c98a;font-size:12px;padding:2px 9px;border:2px solid #241a10">{{ r.name }}</div>
+          <div title="{{ r.tooltip }}" style="position:absolute;left:{{ r.x }}px;top:{{ r.y }}px;width:{{ r.w }}px;height:{{ r.h }}px;background:{{ r.bg }};border:3px solid #171b30;box-shadow:inset 0 0 0 2px #2e3454;box-sizing:border-box">
+            <div style="position:absolute;top:-2px;left:-2px;background:#12152a;color:{{ r.nameColor }};font-size:12px;padding:2px 8px;border:2px solid #2a3050">{{ r.name }}</div>
             <sc-if value="{{ r.standby }}" hint-placeholder-val="{{ false }}">
-              <div style="position:absolute;inset:0;background:rgba(8,5,2,.74);display:flex;align-items:center;justify-content:center;color:#8a7458;font-size:12px;animation:pulse 3s infinite">消灯中 · standby</div>
+              <div style="position:absolute;inset:0;background:rgba(5,7,15,.72);display:flex;align-items:center;justify-content:center;color:#6a7194;font-size:12px;animation:pulse 3s infinite">消灯中 · standby</div>
             </sc-if>
           </div>
         </sc-for>
 
         <sc-for list="{{ furniture }}" as="d" hint-placeholder-count="8">
           <div style="position:absolute;left:{{ d.x }}px;top:{{ d.y }}px">
-            <sc-if value="{{ d.isRug }}" hint-placeholder-val="{{ false }}">
-              <div style="width:150px;height:78px;background:#3f6b58;border:4px solid #35594a;box-shadow:inset 0 0 0 5px #467a64;box-sizing:border-box"></div>
-            </sc-if>
             <sc-if value="{{ d.isDesk }}" hint-placeholder-val="{{ true }}">
-              <div style="width:56px;height:24px;background:#9c6a44;border:3px solid #3a2415;box-shadow:inset 0 3px 0 #b07c50;position:relative">
-                <div style="position:absolute;left:15px;top:-38px;width:26px;height:38px;background:#7d3b2a;border:3px solid #2a160d;box-shadow:inset 0 4px 0 #95503a, inset 0 -8px 0 #6b3222"></div>
-                <div style="position:absolute;left:7px;top:2px;width:16px;height:10px;background:#0c1f14;border:2px solid #10131f;box-shadow:inset 0 0 0 1px #17452b"></div>
-                <div style="position:absolute;left:5px;top:15px;width:24px;height:3px;background:#241a10"></div>
-                <div style="position:absolute;right:5px;top:4px;width:9px;height:7px;background:#e8e0cc;border:1px solid #b39b78"></div>
+              <div style="width:20px;height:14px;background:#0c1f14;border:2px solid #3a4166;margin:0 auto;box-shadow:inset 0 0 0 1px #17452b, inset 0 2px 0 #1d5a35"></div>
+              <div style="width:4px;height:3px;background:#3a4166;margin:0 auto"></div>
+              <div style="width:56px;height:22px;background:#7d5838;border:3px solid #241a10;box-shadow:inset 0 3px 0 #8f6a48;position:relative">
+                <div style="position:absolute;left:9px;top:2px;width:16px;height:9px;background:#0c1f14;border:2px solid #10131f;box-shadow:inset 0 0 0 1px #17452b"></div>
+                <div style="position:absolute;left:7px;top:13px;width:24px;height:3px;background:#242a44;border:1px solid #10131f"></div>
+                <div style="position:absolute;right:6px;top:7px;width:4px;height:5px;background:#242a44"></div>
               </div>
             </sc-if>
             <sc-if value="{{ d.isTable }}" hint-placeholder-val="{{ false }}">
-              <div style="width:120px;height:44px;background:#6b3527;border:3px solid #2a160d;box-shadow:inset 0 4px 0 #7d4232;position:relative">
+              <div style="width:120px;height:44px;background:#7d5838;border:3px solid #241a10;box-shadow:inset 0 4px 0 #8f6a48;position:relative">
                 <div style="position:absolute;left:14px;top:8px;width:16px;height:11px;background:#242a44;border:2px solid #10131f;box-shadow:inset 0 -4px 0 #0c1f14"></div>
                 <div style="position:absolute;right:14px;top:18px;width:16px;height:11px;background:#242a44;border:2px solid #10131f;box-shadow:inset 0 -4px 0 #0c1f14"></div>
               </div>
@@ -132,9 +115,10 @@ input[type=range]{accent-color:#d9a441}
                 <div style="height:3px;background:#262c4e"></div>
                 <div style="height:3px;background:#262c4e"></div>
               </div>
+              <div style="font-size:9px;color:#6a7194;text-align:center;margin-top:2px">RACK</div>
             </sc-if>
             <sc-if value="{{ d.isPrinter }}" hint-placeholder-val="{{ false }}">
-              <div style="width:34px;height:8px;background:#e8e0cc;border:2px solid #10131f;margin:0 auto"></div>
+              <div style="width:34px;height:8px;background:#e8eaf6;border:2px solid #10131f;margin:0 auto"></div>
               <div style="width:44px;height:20px;background:#8c93ad;border:3px solid #10131f;box-shadow:inset 0 3px 0 #a6adc7;position:relative">
                 <div style="position:absolute;right:4px;top:4px;width:5px;height:4px;background:#7ef29a;animation:blink 2s steps(2) infinite"></div>
                 <div style="position:absolute;left:4px;bottom:3px;width:18px;height:4px;background:#3a4166"></div>
@@ -160,46 +144,52 @@ input[type=range]{accent-color:#d9a441}
                 <div style="margin-top:3px;height:4px;background:#10131f"></div>
               </div>
             </sc-if>
-            <sc-if value="{{ d.isShelf }}" hint-placeholder-val="{{ false }}">
-              <div style="width:64px;height:28px;background:#4a2f1e;border:3px solid #241a10;display:flex;gap:3px;align-items:flex-end;padding:3px;box-sizing:border-box">
-                <div style="width:8px;height:16px;background:#5a6d9e"></div>
-                <div style="width:8px;height:13px;background:#b5514a"></div>
-                <div style="width:8px;height:17px;background:#5a8f6d"></div>
-                <div style="width:8px;height:12px;background:#c98f3c"></div>
-              </div>
-            </sc-if>
-            <sc-if value="{{ d.isSofa }}" hint-placeholder-val="{{ false }}">
-              <div style="width:60px;height:10px;background:#8a4434;border:3px solid #2a160d;border-bottom:none"></div>
-              <div style="width:60px;height:14px;background:#a35240;border:3px solid #2a160d;box-shadow:inset 0 3px 0 #b5604c"></div>
-            </sc-if>
-            <sc-if value="{{ d.isCooler }}" hint-placeholder-val="{{ false }}">
-              <div style="width:12px;height:9px;background:#6be5ff;border:2px solid #10131f;margin:0 auto"></div>
-              <div style="width:18px;height:24px;background:#e8e0cc;border:2px solid #10131f;margin:0 auto;position:relative"><div style="position:absolute;left:3px;top:9px;width:5px;height:4px;background:#5a6d9e"></div></div>
-            </sc-if>
             <sc-if value="{{ d.isPlant }}" hint-placeholder-val="{{ false }}">
               <div style="width:18px;height:14px;background:#3f9e5a;margin:0 auto;box-shadow:2px 2px 0 #2b6e3e"></div>
               <div style="width:14px;height:10px;background:#a34b2e;border:2px solid #5f2b1a;margin:0 auto"></div>
             </sc-if>
+            <sc-if value="{{ d.isShelf }}" hint-placeholder-val="{{ false }}">
+              <div style="width:64px;height:28px;background:#4a3524;border:3px solid #241a10;display:flex;gap:3px;align-items:flex-end;padding:3px;box-sizing:border-box">
+                <div style="width:8px;height:16px;background:#6be5ff"></div>
+                <div style="width:8px;height:13px;background:#ff9ecb"></div>
+                <div style="width:8px;height:17px;background:#7ef29a"></div>
+                <div style="width:8px;height:12px;background:#ffd166"></div>
+              </div>
+            </sc-if>
           </div>
         </sc-for>
+        </sc-if>
 
-        <svg width="960" height="600" style="position:absolute;left:0;top:0;pointer-events:none;z-index:4">
+        <div onMouseEnter="{{ onBoardEnter }}" onMouseLeave="{{ onBoardLeave }}" style="position:absolute;left:10px;top:10px;z-index:8;cursor:pointer;width:214px;background:#eef0f8;border:3px solid #241a10;box-shadow:3px 3px 0 #000">
+          <div style="background:#241a10;color:#ffd166;font-size:11px;padding:3px 8px;display:flex;justify-content:space-between;align-items:center"><span>📋 ホワイトボード</span><span style="background:#ffd166;color:#241a10;padding:0 5px">{{ boardCount }}</span></div>
+          <div style="padding:6px 9px;min-height:38px">
+            <sc-for list="{{ boardLines }}" as="b" hint-placeholder-count="2">
+              <div style="font-size:10px;line-height:1.4;color:#20304a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">・{{ b.txt }}</div>
+            </sc-for>
+            <sc-if value="{{ boardIdle }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:10px;color:#8c93ad">実行中タスクなし</div>
+            </sc-if>
+            <div style="font-size:9px;color:#7a86a3;margin-top:5px;border-top:1px dashed #b9bfd4;padding-top:3px">hover で全件表示</div>
+          </div>
+        </div>
+
+        <svg width="960" height="540" style="position:absolute;left:0;top:0;pointer-events:none;z-index:4">
           <sc-for list="{{ links }}" as="ln" hint-placeholder-count="0">
-            <line x1="{{ ln.x1 }}" y1="{{ ln.y1 }}" x2="{{ ln.x2 }}" y2="{{ ln.y2 }}" stroke="#e8c98a" stroke-width="2" stroke-dasharray="4 4"></line>
+            <line x1="{{ ln.x1 }}" y1="{{ ln.y1 }}" x2="{{ ln.x2 }}" y2="{{ ln.y2 }}" stroke="#9aa0b8" stroke-width="2" stroke-dasharray="4 4"></line>
           </sc-for>
         </svg>
 
         <sc-for list="{{ chars }}" as="c" hint-placeholder-count="6">
-          <div onMouseEnter="{{ c.onEnter }}" onMouseLeave="{{ c.onLeave }}" style="position:absolute;width:34px;left:{{ c.x }}px;top:{{ c.y }}px;transition:left 1.4s linear, top 1.4s linear;z-index:5;cursor:pointer;text-align:center;outline:{{ c.ring }};outline-offset:3px">
-            <div style="height:20px;margin-bottom:2px">
+          <div onMouseEnter="{{ c.onEnter }}" onMouseLeave="{{ c.onLeave }}" style="position:absolute;width:52px;left:{{ c.x }}px;top:{{ c.y }}px;transition:left 1.4s linear, top 1.4s linear;z-index:5;cursor:pointer;text-align:center;outline:{{ c.ring }};outline-offset:2px">
+            <div style="height:18px;margin-bottom:1px">
               <sc-if value="{{ c.showBubble }}" hint-placeholder-val="{{ true }}">
-                <div style="display:inline-block;background:#241a10;border:2px solid {{ c.stateColor }};color:{{ c.stateColor }};font-size:10px;line-height:1;padding:3px 4px;animation:{{ c.bubbleAnim }};box-shadow:2px 2px 0 rgba(0,0,0,.5);white-space:nowrap">{{ c.stateLabel }}</div>
+                <div style="display:inline-block;background:#0b0d18;border:2px solid {{ c.stateColor }};color:{{ c.stateColor }};font-size:10px;line-height:1;padding:3px 4px;animation:{{ c.bubbleAnim }};box-shadow:1px 1px 0 rgba(0,0,0,.6)">{{ c.stateLabel }}</div>
               </sc-if>
             </div>
-            <div style="animation:bob 2.4s infinite;width:24px;height:32px;margin:0 auto">
-              <div style="width:2px;height:2px;box-shadow:{{ c.sprite }}"></div>
+            <div style="animation:bob 2.6s infinite">
+              <div style="{{ c.spriteStyle }}"></div>
             </div>
-            <div style="font-size:10px;color:#efe6d6;background:rgba(20,12,6,.85);margin-top:3px;padding:1px 2px">{{ c.name }}</div>
+            <div style="font-size:10px;color:#e8eaf6;background:rgba(11,13,24,.82);margin:1px auto 0;padding:1px 3px;display:inline-block">{{ c.name }}</div>
           </div>
         </sc-for>
 
@@ -208,7 +198,7 @@ input[type=range]{accent-color:#d9a441}
             <div style="font-size:16px;color:#d94f5c;border-bottom:2px solid #b9bfd4;padding-bottom:6px;margin-bottom:10px">実行中タスク（ホワイトボード）</div>
             <sc-for list="{{ boardAll }}" as="b" hint-placeholder-count="3">
               <div style="display:flex;align-items:center;gap:10px;padding:5px 0;font-size:14px;color:#20304a">
-                <div style="font-size:11px;color:{{ b.stateColor }};border:2px solid {{ b.stateColor }};background:#241a10;padding:2px 6px;flex-shrink:0">{{ b.stateLabel }}</div>
+                <div style="font-size:11px;color:{{ b.stateColor }};border:2px solid {{ b.stateColor }};background:#12152a;padding:2px 6px;flex-shrink:0">{{ b.stateLabel }}</div>
                 <div style="flex-shrink:0">{{ b.name }} <span style="color:#8c93ad;font-size:12px">({{ b.role }})</span></div>
                 <div style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ b.tool }}</div>
               </div>
@@ -218,33 +208,32 @@ input[type=range]{accent-color:#d9a441}
             </sc-if>
           </div>
         </sc-if>
-
         <sc-if value="{{ hover.show }}" hint-placeholder-val="{{ false }}">
-          <div style="position:absolute;left:{{ hover.x }}px;top:{{ hover.y }}px;z-index:20;pointer-events:none;background:#241a10;border:2px solid {{ hover.stateColor }};box-shadow:4px 4px 0 #000;padding:10px 12px;font-size:12px;line-height:1.7;min-width:190px">
-            <div style="color:{{ hover.stateColor }};font-size:13px">{{ hover.name }} <span style="color:#b39b78">({{ hover.role }})</span></div>
-            <div><span style="color:#8a7458">部署</span> {{ hover.dept }}</div>
-            <div><span style="color:#8a7458">セッション</span> {{ hover.session }} · {{ hover.model }}</div>
-            <div><span style="color:#8a7458">状態</span> {{ hover.stateLabel }}</div>
-            <div><span style="color:#8a7458">ツール</span> {{ hover.tool }}</div>
-            <div><span style="color:#8a7458">経過</span> {{ hover.elapsed }}</div>
+          <div style="position:absolute;left:{{ hover.x }}px;top:{{ hover.y }}px;z-index:20;pointer-events:none;background:#12152a;border:2px solid {{ hover.stateColor }};box-shadow:4px 4px 0 #000;padding:10px 12px;font-size:12px;line-height:1.7;min-width:190px">
+            <div style="color:{{ hover.stateColor }};font-size:13px">{{ hover.name }} <span style="color:#9aa0b8">({{ hover.role }})</span></div>
+            <div><span style="color:#6a7194">部署</span> {{ hover.dept }}</div>
+            <div><span style="color:#6a7194">セッション</span> {{ hover.session }} · {{ hover.model }}</div>
+            <div><span style="color:#6a7194">状態</span> {{ hover.stateLabel }}</div>
+            <div><span style="color:#6a7194">ツール</span> {{ hover.tool }}</div>
+            <div><span style="color:#6a7194">経過</span> {{ hover.elapsed }}</div>
           </div>
         </sc-if>
 
         <sc-if value="{{ isEditor }}" hint-placeholder-val="{{ false }}">
-          <div style="position:absolute;inset:0;z-index:15;pointer-events:none;background-image:linear-gradient(rgba(217,164,65,.15) 1px, transparent 1px),linear-gradient(90deg, rgba(217,164,65,.15) 1px, transparent 1px);background-size:32px 32px"></div>
+          <div style="position:absolute;inset:0;z-index:15;pointer-events:none;background-image:linear-gradient(rgba(126,242,154,.13) 1px, transparent 1px),linear-gradient(90deg, rgba(126,242,154,.13) 1px, transparent 1px);background-size:32px 32px"></div>
         </sc-if>
       </div>
 
       <sc-if value="{{ showSidebar }}" hint-placeholder-val="{{ true }}">
-        <div style="width:968px;box-sizing:border-box;background:#241a10;border:3px solid #d9a441;box-shadow:6px 6px 0 #000;padding:12px 16px">
-          <div style="font-size:13px;line-height:1.7"><span style="color:#d9a441">{{ narrName }}</span><span style="color:#efe6d6"> です！ </span><span style="color:#e8c98a">{{ latestNarr }}</span></div>
+        <div style="width:966px;box-sizing:border-box;background:#12152a;border:3px solid #ffd166;box-shadow:6px 6px 0 #000;padding:12px 16px">
+          <div style="font-size:13px;line-height:1.7"><span style="color:#ffd166">{{ narrName }}</span><span style="color:#e8eaf6"> です！ </span><span style="color:#c6cbe0">{{ latestNarr }}</span></div>
           <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
-            <button onClick="{{ approveAll }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:12px;cursor:pointer;padding:6px 12px;background:#7ef29a;color:#241a10;border:2px solid #3a2415;box-shadow:2px 2px 0 #000">✔ 承認して進める</button>
-            <button onClick="{{ togglePause }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:12px;cursor:pointer;padding:6px 12px;background:#ffd166;color:#241a10;border:2px solid #3a2415;box-shadow:2px 2px 0 #000">{{ pauseLabel }}</button>
-            <button onClick="{{ makeReport }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:12px;cursor:pointer;padding:6px 12px;background:#6be5ff;color:#241a10;border:2px solid #3a2415;box-shadow:2px 2px 0 #000">報告して</button>
-            <button onClick="{{ freeLook }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:12px;cursor:pointer;padding:6px 12px;background:#3a2c1c;color:#efe6d6;border:2px solid #3a2415;box-shadow:2px 2px 0 #000">自由に見る</button>
+            <button onClick="{{ approveAll }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:12px;cursor:pointer;padding:6px 12px;background:#7ef29a;color:#0b0d18;border:2px solid #2a3050;box-shadow:2px 2px 0 #000">✔ 承認して進める</button>
+            <button onClick="{{ togglePause }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:12px;cursor:pointer;padding:6px 12px;background:#ffd166;color:#0b0d18;border:2px solid #2a3050;box-shadow:2px 2px 0 #000">{{ pauseLabel }}</button>
+            <button onClick="{{ makeReport }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:12px;cursor:pointer;padding:6px 12px;background:#6be5ff;color:#0b0d18;border:2px solid #2a3050;box-shadow:2px 2px 0 #000">報告して</button>
+            <button onClick="{{ freeLook }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:12px;cursor:pointer;padding:6px 12px;background:#1a1f3a;color:#e8eaf6;border:2px solid #2a3050;box-shadow:2px 2px 0 #000">自由に見る</button>
             <div style="flex:1"></div>
-            <div style="font-size:12px;color:#b39b78">待ち {{ waitingCount }} 件</div>
+            <div style="font-size:12px;color:#9aa0b8">待ち {{ waitingCount }} 件</div>
           </div>
         </div>
       </sc-if>
@@ -252,47 +241,47 @@ input[type=range]{accent-color:#d9a441}
 
     <sc-if value="{{ showSidebar }}" hint-placeholder-val="{{ true }}">
       <div style="width:340px;display:flex;flex-direction:column;gap:14px">
-        <div style="background:#241a10;border:3px solid #3a2415;box-shadow:4px 4px 0 #000">
-          <div style="padding:8px 12px;border-bottom:2px solid #3a2415;font-size:13px;color:#d9a441">セッション <span style="color:#8a7458">{{ sessionCount }}</span></div>
+        <div style="background:#12152a;border:3px solid #2a3050;box-shadow:4px 4px 0 #000">
+          <div style="padding:8px 12px;border-bottom:2px solid #2a3050;font-size:13px;color:#7ef29a">セッション <span style="color:#6a7194">{{ sessionCount }}</span></div>
           <div style="display:flex;flex-direction:column">
             <sc-for list="{{ sessions }}" as="s" hint-placeholder-count="5">
-              <div onClick="{{ s.onClick }}" style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;background:{{ s.bg }};border-bottom:1px solid #33241a" style-hover="background:#33241a">
+              <div onClick="{{ s.onClick }}" style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;background:{{ s.bg }};border-bottom:1px solid #1a1e36" style-hover="background:#1a1f3a">
                 <div style="width:10px;height:10px;background:{{ s.color }};box-shadow:1px 1px 0 #000"></div>
                 <div style="flex:1;min-width:0">
-                  <div style="font-size:12px">{{ s.name }} <span style="color:#8a7458">{{ s.role }}</span></div>
-                  <div style="font-size:11px;color:#8a7458">{{ s.session }} · {{ s.model }} · {{ s.elapsed }}</div>
+                  <div style="font-size:12px">{{ s.name }} <span style="color:#6a7194">{{ s.role }}</span></div>
+                  <div style="font-size:11px;color:#6a7194">{{ s.session }} · {{ s.model }} · {{ s.elapsed }}</div>
                 </div>
-                <div style="font-size:10px;color:{{ s.stateColor }};border:2px solid {{ s.stateColor }};padding:2px 5px;white-space:nowrap">{{ s.stateLabel }}</div>
+                <div style="font-size:10px;color:{{ s.stateColor }};border:2px solid {{ s.stateColor }};padding:2px 5px">{{ s.stateLabel }}</div>
               </div>
             </sc-for>
           </div>
         </div>
 
-        <div style="background:#241a10;border:3px solid #ffd166;box-shadow:4px 4px 0 #000">
-          <div style="padding:8px 12px;border-bottom:2px solid #3a2415;font-size:13px;color:#ffd166">待ちパネル <span style="color:#8a7458">— 見逃し防止</span></div>
+        <div style="background:#12152a;border:3px solid #ffd166;box-shadow:4px 4px 0 #000">
+          <div style="padding:8px 12px;border-bottom:2px solid #2a3050;font-size:13px;color:#ffd166">待ちパネル <span style="color:#6a7194">— 見逃し防止</span></div>
           <sc-if value="{{ hasWaiting }}" hint-placeholder-val="{{ true }}">
             <sc-for list="{{ waiting }}" as="w" hint-placeholder-count="1">
-              <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid #33241a">
+              <div style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid #1a1e36">
                 <div style="width:8px;height:8px;background:#ffd166;animation:blink 1.2s steps(2) infinite"></div>
                 <div style="flex:1;min-width:0">
-                  <div style="font-size:12px">{{ w.name }} <span style="color:#b39b78">{{ w.session }}</span></div>
+                  <div style="font-size:12px">{{ w.name }} <span style="color:#9aa0b8">{{ w.session }}</span></div>
                   <div style="font-size:11px;color:#ffd166">{{ w.tool }}</div>
                 </div>
-                <div style="font-size:11px;color:#8a7458">{{ w.elapsed }}</div>
-                <button onClick="{{ w.onClick }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:11px;cursor:pointer;padding:4px 8px;background:#ffd166;color:#241a10;border:2px solid #3a2415;box-shadow:2px 2px 0 #000">確認</button>
+                <div style="font-size:11px;color:#6a7194">{{ w.elapsed }}</div>
+                <button onClick="{{ w.onClick }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:11px;cursor:pointer;padding:4px 8px;background:#ffd166;color:#0b0d18;border:2px solid #2a3050;box-shadow:2px 2px 0 #000">確認</button>
               </div>
             </sc-for>
           </sc-if>
           <sc-if value="{{ noWaiting }}" hint-placeholder-val="{{ false }}">
-            <div style="padding:12px;font-size:12px;color:#8a7458">許可待ち・入力待ちはありません</div>
+            <div style="padding:12px;font-size:12px;color:#6a7194">許可待ち・入力待ちはありません</div>
           </sc-if>
         </div>
 
-        <div style="background:#241a10;border:3px solid #3a2415;box-shadow:4px 4px 0 #000">
-          <div style="padding:8px 12px;border-bottom:2px solid #3a2415;font-size:13px;color:#6be5ff">イベントログ</div>
+        <div style="background:#12152a;border:3px solid #2a3050;box-shadow:4px 4px 0 #000">
+          <div style="padding:8px 12px;border-bottom:2px solid #2a3050;font-size:13px;color:#6be5ff">イベントログ</div>
           <div style="padding:8px 12px;display:flex;flex-direction:column;gap:5px">
             <sc-for list="{{ log }}" as="e" hint-placeholder-count="6">
-              <div style="font-size:11px;line-height:1.5"><span style="color:#8a7458">{{ e.t }}</span> <span style="color:#d8cbb4">{{ e.txt }}</span></div>
+              <div style="font-size:11px;line-height:1.5"><span style="color:#6a7194">{{ e.t }}</span> <span style="color:#c6cbe0">{{ e.txt }}</span></div>
             </sc-for>
           </div>
         </div>
@@ -304,55 +293,55 @@ input[type=range]{accent-color:#d9a441}
   <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
     <div style="flex:1;padding:24px;display:flex;justify-content:center">
       <div style="width:880px;display:flex;flex-direction:column;gap:16px">
-        <div style="background:#241a10;border:3px solid #3a2415;box-shadow:4px 4px 0 #000">
-          <div style="padding:10px 14px;border-bottom:2px solid #3a2415;font-size:14px;color:#d9a441">組織リポジトリ</div>
+        <div style="background:#12152a;border:3px solid #2a3050;box-shadow:4px 4px 0 #000">
+          <div style="padding:10px 14px;border-bottom:2px solid #2a3050;font-size:14px;color:#7ef29a">組織リポジトリ</div>
           <div style="padding:6px 14px 12px">
-            <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #33241a;font-size:13px">
+            <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #1a1e36;font-size:13px">
               <div style="flex:1">~/cc-sier-organization</div>
               <div style="font-size:11px;color:#6be5ff;border:2px solid #6be5ff;padding:2px 6px">cc-sier</div>
               <div style="font-size:11px;color:#7ef29a">接続中 · 6部署 / 8ロール</div>
             </div>
-            <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #33241a;font-size:13px">
+            <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #1a1e36;font-size:13px">
               <div style="flex:1">~/side-projects/comet-labs</div>
-              <div style="font-size:11px;color:#b39b78;border:2px solid #b39b78;padding:2px 6px">汎用JSON</div>
+              <div style="font-size:11px;color:#9aa0b8;border:2px solid #9aa0b8;padding:2px 6px">汎用JSON</div>
               <div style="font-size:11px;color:#7ef29a">接続中 · 3部署 / 4ロール</div>
             </div>
-            <button style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:13px;cursor:pointer;margin-top:10px;padding:7px 12px;background:#3a2c1c;color:#efe6d6;border:2px solid #3a2415;box-shadow:2px 2px 0 #000">+ リポジトリを追加</button>
+            <button style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:13px;cursor:pointer;margin-top:10px;padding:7px 12px;background:#1a1f3a;color:#e8eaf6;border:2px solid #2a3050;box-shadow:2px 2px 0 #000">+ リポジトリを追加</button>
           </div>
         </div>
         <div style="display:flex;gap:16px">
-          <div style="flex:1;background:#241a10;border:3px solid #3a2415;box-shadow:4px 4px 0 #000">
-            <div style="padding:10px 14px;border-bottom:2px solid #3a2415;font-size:14px;color:#d9a441">通知</div>
+          <div style="flex:1;background:#12152a;border:3px solid #2a3050;box-shadow:4px 4px 0 #000">
+            <div style="padding:10px 14px;border-bottom:2px solid #2a3050;font-size:14px;color:#7ef29a">通知</div>
             <div style="padding:10px 14px;display:flex;flex-direction:column;gap:12px;font-size:13px">
-              <div style="display:flex;align-items:center;gap:10px"><div style="flex:1">チャイム音（完了・許可待ち）</div><button onClick="{{ toggleSound }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:12px;cursor:pointer;padding:5px 12px;background:{{ soundBg }};color:{{ soundFg }};border:2px solid #3a2415;box-shadow:2px 2px 0 #000">{{ soundLabel }}</button></div>
-              <div style="display:flex;align-items:center;gap:10px"><div style="flex:1">タブバッジ（待ち件数）</div><button style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:12px;cursor:pointer;padding:5px 12px;background:#7ef29a;color:#241a10;border:2px solid #3a2415;box-shadow:2px 2px 0 #000">ON</button></div>
+              <div style="display:flex;align-items:center;gap:10px"><div style="flex:1">チャイム音（完了・許可待ち）</div><button onClick="{{ toggleSound }}" style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:12px;cursor:pointer;padding:5px 12px;background:{{ soundBg }};color:{{ soundFg }};border:2px solid #2a3050;box-shadow:2px 2px 0 #000">{{ soundLabel }}</button></div>
+              <div style="display:flex;align-items:center;gap:10px"><div style="flex:1">タブバッジ（待ち件数）</div><button style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:12px;cursor:pointer;padding:5px 12px;background:#7ef29a;color:#0b0d18;border:2px solid #2a3050;box-shadow:2px 2px 0 #000">ON</button></div>
             </div>
           </div>
-          <div style="flex:1;background:#241a10;border:3px solid #3a2415;box-shadow:4px 4px 0 #000">
-            <div style="padding:10px 14px;border-bottom:2px solid #3a2415;font-size:14px;color:#d9a441">doctor 診断</div>
+          <div style="flex:1;background:#12152a;border:3px solid #2a3050;box-shadow:4px 4px 0 #000">
+            <div style="padding:10px 14px;border-bottom:2px solid #2a3050;font-size:14px;color:#7ef29a">doctor 診断</div>
             <div style="padding:10px 14px;display:flex;flex-direction:column;gap:9px;font-size:13px">
               <div style="display:flex;gap:10px"><span style="color:#7ef29a">[OK]</span> hooks 導入 9/9（マーカー #ai-office）</div>
               <div style="display:flex;gap:10px"><span style="color:#7ef29a">[OK]</span> Relay 疎通 localhost:4100</div>
               <div style="display:flex;gap:10px"><span style="color:#7ef29a">[OK]</span> イベント到達（最終: 2秒前）</div>
               <div style="display:flex;gap:10px"><span style="color:#7ef29a">[OK]</span> 他ツール hooks との競合なし</div>
-              <button style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:12px;cursor:pointer;align-self:flex-start;padding:5px 12px;background:#3a2c1c;color:#efe6d6;border:2px solid #3a2415;box-shadow:2px 2px 0 #000">再診断</button>
+              <button style="white-space:nowrap;flex-shrink:0;font-family:inherit;font-size:12px;cursor:pointer;align-self:flex-start;padding:5px 12px;background:#1a1f3a;color:#e8eaf6;border:2px solid #2a3050;box-shadow:2px 2px 0 #000">再診断</button>
             </div>
           </div>
         </div>
-        <div style="background:#241a10;border:3px solid #3a2415;box-shadow:4px 4px 0 #000">
-          <div style="padding:10px 14px;border-bottom:2px solid #3a2415;font-size:14px;color:#d9a441">セットアップ</div>
-          <div style="padding:12px 14px;font-size:13px;line-height:2;color:#d8cbb4;background:#141017;margin:10px 14px 14px;border:2px solid #3a2415">
-            <div><span style="color:#8a7458">$</span> npx ai-office setup <span style="color:#8a7458"># hooks を安全にマージ</span></div>
-            <div><span style="color:#8a7458">$</span> npx ai-office doctor <span style="color:#8a7458"># 導入状態を診断</span></div>
-            <div><span style="color:#8a7458">$</span> npx ai-office teardown <span style="color:#8a7458"># 痕跡ゼロで除去</span></div>
+        <div style="background:#12152a;border:3px solid #2a3050;box-shadow:4px 4px 0 #000">
+          <div style="padding:10px 14px;border-bottom:2px solid #2a3050;font-size:14px;color:#7ef29a">セットアップ</div>
+          <div style="padding:12px 14px;font-size:13px;line-height:2;color:#c6cbe0;background:#0b0d18;margin:10px 14px 14px;border:2px solid #2a3050">
+            <div><span style="color:#6a7194">$</span> npx ai-office setup <span style="color:#6a7194"># hooks を安全にマージ</span></div>
+            <div><span style="color:#6a7194">$</span> npx ai-office doctor <span style="color:#6a7194"># 導入状態を診断</span></div>
+            <div><span style="color:#6a7194">$</span> npx ai-office teardown <span style="color:#6a7194"># 痕跡ゼロで除去</span></div>
           </div>
         </div>
       </div>
     </div>
   </sc-if>
 
-  <div style="padding:6px 20px;border-top:2px solid #33241a;font-size:11px;color:#8a7458;display:flex;gap:16px">
-    <div>AI Virtual Office — フロントモック v2（M0/M1 参照仕様）</div>
+  <div style="padding:6px 20px;border-top:2px solid #1a1e36;font-size:11px;color:#6a7194;display:flex;gap:16px">
+    <div>AI Virtual Office — フロントモック v0.1（M0/M1 参照仕様）</div>
     <div style="flex:1"></div>
     <div>ピクセル素材: モック用プレースホルダー（実装時は CC0 / CC-BY 素材 + 出典表記）</div>
   </div>
@@ -362,43 +351,43 @@ input[type=range]{accent-color:#d9a441}
 class Component extends DCLogic {
   constructor(props){
     super(props);
-    this.STATES={idle:{l:'待機',c:'#b39b78'},type:{l:'編集',c:'#7ef29a'},read:{l:'読取',c:'#6be5ff'},terminal:{l:'端末',c:'#c39bff'},browsing:{l:'閲覧',c:'#5aa2ff'},thinking:{l:'思考',c:'#b39b78'},waiting:{l:'許可待ち',c:'#ffd166'},done:{l:'完了',c:'#ffffff'}};
+    this.STATES={idle:{l:'待機',c:'#9aa0b8'},type:{l:'編集',c:'#7ef29a'},read:{l:'読取',c:'#6be5ff'},terminal:{l:'端末',c:'#c39bff'},browsing:{l:'閲覧',c:'#5aa2ff'},thinking:{l:'思考',c:'#9aa0b8'},waiting:{l:'許可待ち',c:'#ffd166'},done:{l:'完了',c:'#ffffff'}};
     this.FLOORS={
-      nebula:{label:'1F Nebula Works',sign:'NEBULA WORKS OFFICE',rooms:[
-        {name:'開発部',x:16,y:80,w:440,h:236,floor:'planks',trigger:'実装 / フロント / API / 改修'},
-        {name:'リサーチ部',x:472,y:80,w:224,h:236,floor:'planks',trigger:'調査 / 技術選定 / 比較'},
-        {name:'品質保証部',x:712,y:80,w:232,h:236,floor:'planks',trigger:'レビュー / QA / テスト'},
-        {name:'会議室',x:472,y:340,w:300,h:130,floor:'carpet',trigger:'サブエージェント作業スペース'},
-        {name:'総務部',x:788,y:486,w:156,h:98,standby:true,floor:'dark',trigger:'standby: ドア閉鎖・照明OFF'},
-        {name:'受付',x:16,y:486,w:300,h:98,floor:'checker',trigger:'依頼受付（秘書室）'}],
-       furniture:[{k:'rug',x:170,y:352},{k:'desk',x:52,y:204},{k:'desk',x:172,y:204},{k:'desk',x:292,y:204},{k:'shelf',x:330,y:100},{k:'server',x:408,y:100},{k:'plant',x:420,y:270},{k:'desk',x:536,y:204},{k:'shelf',x:492,y:100},{k:'plant',x:648,y:270},{k:'desk',x:776,y:204},{k:'plant',x:896,y:270},{k:'board',x:566,y:346},{k:'table',x:556,y:396},{k:'desk',x:100,y:530},{k:'plant',x:270,y:530},{k:'sofa',x:560,y:500},{k:'cooler',x:650,y:496},{k:'vending',x:690,y:486},{k:'printer',x:350,y:396}]},
-      comet:{label:'2F Comet Labs',sign:'COMET LABS OFFICE',rooms:[
-        {name:'分析部',x:16,y:80,w:460,h:250,floor:'planks',trigger:'集計 / 分析 / メトリクス'},
-        {name:'編集部',x:500,y:80,w:444,h:250,floor:'planks',trigger:'記事 / ドキュメント / 校正'},
-        {name:'受付',x:16,y:390,w:300,h:190,floor:'checker',trigger:'依頼受付（秘書室）'}],
-       furniture:[{k:'desk',x:108,y:220},{k:'desk',x:248,y:220},{k:'plant',x:400,y:280},{k:'desk',x:608,y:220},{k:'shelf',x:840,y:96},{k:'server',x:400,y:96},{k:'board',x:620,y:96},{k:'plant',x:880,y:280},{k:'desk',x:100,y:480},{k:'plant',x:270,y:500},{k:'sofa',x:560,y:420},{k:'cooler',x:650,y:416},{k:'vending',x:690,y:406},{k:'printer',x:350,y:346}]}
+      nebula:{label:'1F Nebula Works',img:'uploads/pasted-1784539452479-0.png',rooms:[
+        {name:'開発部',x:16,y:16,w:440,h:260,trigger:'実装 / フロント / API / 改修'},
+        {name:'リサーチ部',x:472,y:16,w:224,h:260,trigger:'調査 / 技術選定 / 比較'},
+        {name:'品質保証部',x:712,y:16,w:232,h:260,trigger:'レビュー / QA / テスト'},
+        {name:'会議室',x:472,y:300,w:300,h:140,trigger:'サブエージェント作業スペース'},
+        {name:'総務部',x:788,y:460,w:156,h:124,standby:true,trigger:'standby: ドア閉鎖・照明OFF'},
+        {name:'受付',x:16,y:460,w:300,h:124,trigger:'依頼受付（秘書室）'}],
+       furniture:[{k:'desk',x:52,y:150},{k:'desk',x:172,y:150},{k:'desk',x:292,y:150},{k:'shelf',x:330,y:44},{k:'plant',x:404,y:210},{k:'desk',x:536,y:150},{k:'plant',x:648,y:210},{k:'desk',x:776,y:150},{k:'plant',x:896,y:210},{k:'table',x:556,y:352},{k:'board',x:566,y:304},{k:'server',x:408,y:52},{k:'desk',x:100,y:512},{k:'plant',x:270,y:520},{k:'vending',x:620,y:478},{k:'printer',x:700,y:498}]},
+      comet:{label:'2F Comet Labs',img:'uploads/pasted-1784539355913-0.png',rooms:[
+        {name:'分析部',x:16,y:16,w:460,h:300,trigger:'集計 / 分析 / メトリクス'},
+        {name:'編集部',x:500,y:16,w:444,h:300,trigger:'記事 / ドキュメント / 校正'},
+        {name:'受付',x:16,y:380,w:300,h:190,trigger:'依頼受付（秘書室）'}],
+       furniture:[{k:'desk',x:108,y:170},{k:'desk',x:248,y:170},{k:'plant',x:400,y:250},{k:'desk',x:608,y:170},{k:'shelf',x:840,y:44},{k:'plant',x:880,y:250},{k:'desk',x:100,y:432},{k:'plant',x:270,y:470},{k:'server',x:400,y:52},{k:'board',x:600,y:40},{k:'vending',x:600,y:322},{k:'printer',x:236,y:420}]}
     };
     this.BASE=[
-      {id:'sec',floor:'nebula',name:'ミナト',role:'secretary',dept:'受付',model:'sonnet',color:'#ff9ecb',hair:'#f0c05a',x:112,y:478,session:'sess-f001',fem:true},
-      {id:'c1',floor:'nebula',name:'アオイ',role:'frontend-dev',dept:'開発部',model:'sonnet',color:'#6be5ff',hair:'#e07a9a',x:64,y:152,session:'sess-a3f2',fem:true},
-      {id:'c2',floor:'nebula',name:'リク',role:'backend-dev',dept:'開発部',model:'opus',color:'#7ef29a',hair:'#3a2c22',x:184,y:152,session:'sess-b81c'},
-      {id:'c5',floor:'nebula',name:'ハル',role:'devops',dept:'開発部',model:'sonnet',color:'#c39bff',hair:'#553a6e',x:304,y:152,session:'sess-9d40'},
-      {id:'c3',floor:'nebula',name:'ソラ',role:'tech-researcher',dept:'リサーチ部',model:'sonnet',color:'#f2a65a',hair:'#20304a',x:548,y:152,session:'sess-71aa'},
-      {id:'c4',floor:'nebula',name:'ツムギ',role:'qa-reviewer',dept:'品質保証部',model:'opus',color:'#8fe388',hair:'#c9803a',x:788,y:152,session:'sess-d10e',fem:true},
-      {id:'ksec',floor:'comet',name:'ハナ',role:'secretary',dept:'受付',model:'sonnet',color:'#ff9ecb',hair:'#f7d98c',x:112,y:428,session:'sess-2200',fem:true},
-      {id:'k1',floor:'comet',name:'レン',role:'data-analyst',dept:'分析部',model:'sonnet',color:'#6be5ff',hair:'#20304a',x:120,y:168,session:'sess-2a11'},
-      {id:'k2',floor:'comet',name:'ジュン',role:'data-engineer',dept:'分析部',model:'sonnet',color:'#c39bff',hair:'#3a2c22',x:260,y:168,session:'sess-2b3c'},
-      {id:'k3',floor:'comet',name:'ユイ',role:'tech-writer',dept:'編集部',model:'opus',color:'#8fe388',hair:'#a97ae0',x:620,y:168,session:'sess-2c88',fem:true}
+      {id:'sec',floor:'nebula',name:'ミナト',role:'secretary',dept:'受付',model:'sonnet',color:'#ff9ecb',hair:'#f0c05a',x:448,y:452,session:'sess-f001',fem:true},
+      {id:'c1',floor:'nebula',name:'アオイ',role:'frontend-dev',dept:'開発部',model:'sonnet',color:'#6be5ff',hair:'#e07a9a',x:272,y:63,session:'sess-a3f2',fem:true},
+      {id:'c2',floor:'nebula',name:'リク',role:'backend-dev',dept:'開発部',model:'opus',color:'#7ef29a',hair:'#3a2c22',x:479,y:86,session:'sess-b81c'},
+      {id:'c5',floor:'nebula',name:'ハル',role:'devops',dept:'開発部',model:'sonnet',color:'#c39bff',hair:'#553a6e',x:654,y:86,session:'sess-9d40'},
+      {id:'c3',floor:'nebula',name:'ソラ',role:'tech-researcher',dept:'リサーチ部',model:'sonnet',color:'#f2a65a',hair:'#20304a',x:129,y:230,session:'sess-71aa'},
+      {id:'c4',floor:'nebula',name:'ツムギ',role:'qa-reviewer',dept:'品質保証部',model:'opus',color:'#8fe388',hair:'#c9803a',x:651,y:233,session:'sess-d10e',fem:true},
+      {id:'ksec',floor:'comet',name:'ハナ',role:'secretary',dept:'受付',model:'sonnet',color:'#ff9ecb',hair:'#f7d98c',x:448,y:452,session:'sess-2200',fem:true},
+      {id:'k1',floor:'comet',name:'レン',role:'data-analyst',dept:'分析部',model:'sonnet',color:'#6be5ff',hair:'#20304a',x:142,y:233,session:'sess-2a11'},
+      {id:'k2',floor:'comet',name:'ジュン',role:'data-engineer',dept:'分析部',model:'sonnet',color:'#c39bff',hair:'#3a2c22',x:709,y:233,session:'sess-2b3c'},
+      {id:'k3',floor:'comet',name:'ユイ',role:'tech-writer',dept:'編集部',model:'opus',color:'#8fe388',hair:'#a97ae0',x:563,y:106,session:'sess-2c88',fem:true}
     ];
     this.CYCLES={k1:[['type','Edit: report.ipynb'],['read','Read: metrics.csv'],['thinking','—'],['type','Edit: report.ipynb'],['done','—'],['idle','—']],
       k2:[['terminal','Bash: dbt run'],['thinking','—'],['read','Read: models/'],['terminal','Bash: dbt test'],['done','—'],['idle','—']],
       k3:[['read','Read: draft.md'],['type','Write: draft.md'],['thinking','—'],['type','Write: draft.md'],['done','—'],['idle','—']]};
     this.SCEN=[
-      [{log:'UserPromptSubmit: 「ダッシュボード画面を実装して」'},{c:'sec',m:[240,410]},{c:'c1',s:'thinking',tool:'—'}],
-      [{c:'sec',m:[390,250]},{c:'c1',s:'type',tool:'Edit: Dashboard.tsx'},{log:'PreToolUse: Edit (sess-a3f2)'},{c:'c5',s:'terminal',tool:'Bash: docker compose up'}],
-      [{c:'sec',m:[112,478]},{c:'c2',s:'terminal',tool:'Bash: pnpm test'},{log:'PreToolUse: Bash (sess-b81c)'}],
+      [{log:'UserPromptSubmit: 「ダッシュボード画面を実装して」'},{c:'sec',m:[448,392]},{c:'c1',s:'thinking',tool:'—'}],
+      [{c:'sec',m:[448,352]},{c:'c1',s:'type',tool:'Edit: Dashboard.tsx'},{log:'PreToolUse: Edit (sess-a3f2)'},{c:'c5',s:'terminal',tool:'Bash: docker compose up'}],
+      [{c:'sec',m:[448,452]},{c:'c2',s:'terminal',tool:'Bash: pnpm test'},{log:'PreToolUse: Bash (sess-b81c)'}],
       [{c:'c3',s:'browsing',tool:'WebFetch: SSE 仕様の調査'},{log:'PreToolUse: WebFetch (sess-71aa)'}],
-      [{spawn:{id:'sub1',floor:'nebula',name:'sub-01',role:'general-purpose',dept:'会議室',model:'sonnet',color:'#b39b78',hair:'#20304a',x:690,y:392,session:'sub-01 (親: sess-b81c)',isSub:true}},{log:'PreToolUse: Task → サブエージェント生成'},{c:'sub1',s:'read',tool:'Read: schema.ts'}],
+      [{spawn:{id:'sub1',floor:'nebula',name:'sub-01',role:'general-purpose',dept:'会議室',model:'sonnet',color:'#9aa0b8',hair:'#20304a',x:146,y:359,session:'sub-01 (親: sess-b81c)',isSub:true}},{log:'PreToolUse: Task → サブエージェント生成'},{c:'sub1',s:'read',tool:'Read: schema.ts'}],
       [{c:'c1',s:'waiting',tool:'Write: .env.local の許可待ち'},{log:'Notification: 許可待ち (sess-a3f2)'},{c:'c4',s:'read',tool:'Read: PR #42 diff'}],
       [{c:'sub1',s:'type',tool:'Edit: migration.sql'},{c:'c2',s:'thinking',tool:'—'},{c:'c5',s:'thinking',tool:'—'}],
       [{c:'c4',s:'waiting',tool:'入力待ち: レビュー方針の確認'},{log:'Notification: 入力待ち (sess-d10e)'}],
@@ -411,16 +400,14 @@ class Component extends DCLogic {
       [{c:'c2',s:'done',tool:'—'},{c:'c3',s:'done',tool:'—'},{log:'SessionEnd: sess-b81c 退社'}],
       [{c:'c1',s:'idle',tool:'—'},{c:'c2',s:'idle',tool:'—'},{c:'c3',s:'idle',tool:'—'},{c:'c4',s:'idle',tool:'—'},{c:'c5',s:'idle',tool:'—'},{log:'SessionStart: sess-a3f2 出社'}]
     ];
-    this.state={view:'office',floor:'nebula',tick:0,step:-1,chars:this.freshChars(),log:[],hoverId:null,focusId:null,playing:false,speed:1,sound:true,edTool:'desk',boardHover:false,simPaused:false};
+    this.state={view:'office',floor:'nebula',tick:0,step:-1,chars:this.freshChars(),log:[],hoverId:null,focusId:null,playing:false,speed:1,sound:true,edTool:'desk'};
   }
   sprite(color,hair,fem){
     const base=["..hhhhhh..",".hhhhhhhh.",".hhhhhhhh.",".hssssssh.",".ssessess.",".ssssssss.","..ssssss..","..bbbbbb..",".sbbbbbbs.",".sbddddbs.","..bbbbbb..","..ll..ll..","..ll..ll..",".kk....kk."];
     const femM=["..hhhhhh..",".hhhhhhhh.",".hhhhhhhh.","hhsssssshh","hssessessh","hssssssssh","hh.ssss.hh","h.bbbbbb.h","hsbbbbbbsh","h.bddddb.h",".bbbbbbbb.","..bbbbbb..","..ss..ss..","..kk..kk.."];
     const C={h:hair,s:'#f2c9a0',e:'#1e2233',b:color,d:'#141830',l:'#2a3050',k:'#10131f'};
-    const M=fem?femM:base,filled={},out=[];
-    M.forEach((row,y)=>{for(let x=0;x<10;x++){const ch=row[x];if(ch&&ch!=='.'){filled[x+','+y]=1;out.push((x*2)+'px '+(y*2)+'px 0 0 '+C[ch]);}}});
-    const oset={};
-    Object.keys(filled).forEach(k=>{const [x,y]=k.split(',').map(Number);[[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx,dy])=>{const nk=(x+dx)+','+(y+dy);if(!filled[nk]&&!oset[nk]){oset[nk]=1;out.push(((x+dx)*2)+'px '+((y+dy)*2)+'px 0 0 #1a120c');}});});
+    const out=[];
+    (fem?femM:base).forEach((row,y)=>{for(let x=0;x<10;x++){const ch=row[x];if(ch&&ch!=='.')out.push((x*2)+'px '+(y*2)+'px 0 0 '+C[ch]);}});
     return out.join(',');
   }
   freshChars(){return this.BASE.map(c=>Object.assign({},c,{state:'idle',tool:'—',waitTick:0}));}
@@ -468,47 +455,48 @@ class Component extends DCLogic {
   renderVals(){
     const st=this.state,S=this.STATES,showStandby=this.props.showStandby??true,showLinks=this.props.showLinkLines??true;
     const floor=this.FLOORS[st.floor];
-    const FLOORBG={planks:'repeating-linear-gradient(90deg,#9c6a44 0 26px,#936039 26px 28px)',carpet:'repeating-conic-gradient(#2f5d4a 0% 25%, #2b5644 0% 50%) 0 0 / 28px 28px',checker:'repeating-conic-gradient(#d8cfc0 0% 25%, #cbc1ae 0% 50%) 0 0 / 28px 28px',dark:'#241c14'};
-    const rooms=floor.rooms.filter(r=>!r.standby||showStandby).map(r=>({name:r.name,x:r.x,y:r.y,w:r.w,h:r.h,standby:!!r.standby,tooltip:'トリガー: '+r.trigger,bg:FLOORBG[r.floor]||FLOORBG.planks}));
-    const furniture=floor.furniture.map(d=>({x:d.x,y:d.y,isDesk:d.k==='desk',isTable:d.k==='table',isPlant:d.k==='plant',isShelf:d.k==='shelf',isServer:d.k==='server',isPrinter:d.k==='printer',isBoard:d.k==='board',isVending:d.k==='vending',isSofa:d.k==='sofa',isCooler:d.k==='cooler',isRug:d.k==='rug'}));
+    const rooms=floor.rooms.filter(r=>!r.standby||showStandby).map(r=>({name:r.name,x:r.x,y:r.y,w:r.w,h:r.h,standby:!!r.standby,tooltip:'トリガー: '+r.trigger,bg:r.standby?'#161a2c':'repeating-conic-gradient(#3b415f 0% 25%, #363c58 0% 50%) 0 0 / 32px 32px',nameColor:r.standby?'#6a7194':'#c6cbe0'}));
+    const furniture=floor.furniture.map(d=>({x:d.x,y:d.y,isDesk:d.k==='desk',isTable:d.k==='table',isPlant:d.k==='plant',isShelf:d.k==='shelf',isServer:d.k==='server',isPrinter:d.k==='printer',isBoard:d.k==='board',isVending:d.k==='vending'}));
     const fchars=st.chars.filter(c=>c.floor===st.floor);
-    const chars=fchars.map(c=>{const s=S[c.state];const sprite=this.sprite(c.color,c.hair,!!c.fem);return{key:c.id,x:c.x,y:c.y,color:c.color,hair:c.hair,sprite,name:c.name,showBubble:c.state!=='idle',stateLabel:s.l,stateColor:s.c,bubbleAnim:c.state==='waiting'?'blink 1s steps(2) infinite':'none',ring:st.focusId===c.id?'3px solid #ffd166':'0 solid transparent',onEnter:()=>this.setState({hoverId:c.id}),onLeave:()=>this.setState({hoverId:null})};});
+    const SPR={sec:'office-1',c1:'office-2',c2:'office-0',c5:'office-4',c3:'office-6',c4:'office-5',sub1:'office-3',ksec:'rpg-3',k1:'rpg-4',k2:'rpg-2',k3:'rpg-0'};
+    const spriteStyle=id=>({width:'52px',height:'56px',backgroundImage:'url("sprites/'+(SPR[id]||'office-0')+'.png")',backgroundSize:'contain',backgroundRepeat:'no-repeat',backgroundPosition:'bottom center',imageRendering:'pixelated',filter:'drop-shadow(1px 2px 0 rgba(0,0,0,.5))'});
+    const chars=fchars.map(c=>{const s=S[c.state];return{key:c.id,x:c.x,y:c.y,color:c.color,hair:c.hair,spriteStyle:spriteStyle(c.id),name:c.name,showBubble:c.state!=='idle',stateLabel:s.l,stateColor:s.c,bubbleAnim:c.state==='waiting'?'blink 1s steps(2) infinite':'none',ring:st.focusId===c.id?'3px solid #ffd166':'0 solid transparent',onEnter:()=>this.setState({hoverId:c.id}),onLeave:()=>this.setState({hoverId:null})};});
     const links=[];
-    if(showLinks)fchars.filter(c=>c.isSub).forEach(sub=>{const p=st.chars.find(c=>c.id==='c2');if(p&&p.floor===st.floor)links.push({key:sub.id,x1:p.x+17,y1:p.y+30,x2:sub.x+17,y2:sub.y+30});});
+    if(showLinks)fchars.filter(c=>c.isSub).forEach(sub=>{const p=st.chars.find(c=>c.id==='c2');if(p&&p.floor===st.floor)links.push({key:sub.id,x1:p.x+26,y1:p.y+50,x2:sub.x+26,y2:sub.y+50});});
     const hc=st.chars.find(c=>c.id===st.hoverId&&c.floor===st.floor);
-    const hover=hc?{show:true,x:Math.min(hc.x+42,740),y:Math.min(Math.max(hc.y-10,8),440),name:hc.name,role:hc.role,dept:hc.dept,session:hc.session,model:hc.model,stateLabel:S[hc.state].l,stateColor:S[hc.state].c,tool:hc.tool,elapsed:this.fmtEl((st.tick%400)*2+137)}:{show:false,x:0,y:0,stateColor:'#3a2415'};
-    const sessions=fchars.map(c=>({key:c.id,name:c.name,role:c.role,session:c.session,model:c.model,color:c.color,stateLabel:S[c.state].l,stateColor:S[c.state].c,elapsed:this.fmtEl((st.tick%400)*2+137),bg:st.focusId===c.id?'#3a2c10':'transparent',onClick:()=>this.focus(c.id,c.floor)}));
+    const hover=hc?{show:true,x:Math.min(hc.x+42,740),y:Math.min(Math.max(hc.y-10,8),440),name:hc.name,role:hc.role,dept:hc.dept,session:hc.session,model:hc.model,stateLabel:S[hc.state].l,stateColor:S[hc.state].c,tool:hc.tool,elapsed:this.fmtEl((st.tick%400)*2+137)}:{show:false,x:0,y:0,stateColor:'#2a3050'};
+    const sessions=fchars.map(c=>({key:c.id,name:c.name,role:c.role,session:c.session,model:c.model,color:c.color,stateLabel:S[c.state].l,stateColor:S[c.state].c,elapsed:this.fmtEl((st.tick%400)*2+137),bg:st.focusId===c.id?'#2a2410':'transparent',onClick:()=>this.focus(c.id,c.floor)}));
     const waitingAll=st.chars.filter(c=>c.state==='waiting');
     const waiting=waitingAll.map(c=>({key:c.id,name:c.name,session:c.session,tool:c.tool,elapsed:this.fmtEl((st.tick-c.waitTick)*2),onClick:()=>this.focus(c.id,c.floor)}));
-    const tab=(label,active,onClick)=>({label,onClick,bg:active?'#d9a441':'#241a10',fg:active?'#241a10':'#b39b78'});
+    const tab=(label,active,onClick)=>({label,onClick,bg:active?'#7ef29a':'#12152a',fg:active?'#0b0d18':'#9aa0b8'});
     const views=[['office','オフィス'],['replay','リプレイ'],['editor','エディタ'],['settings','設定']];
-    const PAL=[['desk','デスク'],['floor','床タイル'],['wall','壁'],['plant','観葉植物'],['shelf','本棚'],['sofa','ソファ']];
-    const running=fchars.filter(c=>c.state!=='idle'&&c.tool&&c.tool!=='—');
-    const secName=st.floor==='nebula'?'ミナト（受付）':'ハナ（受付）';
+    const PAL=[['desk','デスク'],['floor','床タイル'],['wall','壁'],['plant','観葉植物'],['shelf','本棚']];
     return {
-      floorSign:floor.sign,
       floorTabs:Object.keys(this.FLOORS).map(k=>tab(this.FLOORS[k].label,st.floor===k,()=>this.setState({floor:k}))),
       viewTabs:views.map(([id,l])=>tab(l,st.view===id,()=>this.setState({view:id,playing:false}))),
       isSettings:st.view==='settings',notSettings:st.view!=='settings',
       isReplay:st.view==='replay',isEditor:st.view==='editor',
       showSidebar:st.view==='office'||st.view==='replay',
-      boardLines:running.slice(0,3).map((c,i)=>({key:i,txt:c.name+': '+c.tool})),
-      boardAll:running.map((c,i)=>({key:i,name:c.name,role:c.role,tool:c.tool,stateLabel:S[c.state].l,stateColor:S[c.state].c})),
-      boardIdle:running.length===0,
+      boardLines:fchars.filter(c=>c.state!=='idle'&&c.tool&&c.tool!=='—').slice(0,3).map((c,i)=>({key:i,txt:c.name+': '+c.tool})),
+      boardAll:fchars.filter(c=>c.state!=='idle'&&c.tool&&c.tool!=='—').map((c,i)=>({key:i,name:c.name,role:c.role,tool:c.tool,stateLabel:S[c.state].l,stateColor:S[c.state].c})),
+      boardIdle:fchars.filter(c=>c.state!=='idle'&&c.tool&&c.tool!=='—').length===0,
+      boardCount:fchars.filter(c=>c.state!=='idle'&&c.tool&&c.tool!=='—').length,
+      showCss:false,floorImg:floor.img,
+      floorLayerStyle:{position:'absolute',inset:0,zIndex:0,backgroundImage:'url("'+floor.img+'")',backgroundSize:'cover',backgroundPosition:'center',imageRendering:'pixelated'},
       boardHover:!!st.boardHover,
       onBoardEnter:()=>this.setState({boardHover:true}),
       onBoardLeave:()=>this.setState({boardHover:false}),
-      narrName:secName,
+      narrName:st.floor==='nebula'?'ミナト（受付）':'ハナ（受付）',
       latestNarr:st.log.length?('直近のイベント: '+st.log[0].txt):'オフィスは稼働中です。作業の様子を見守っています。',
       approveAll:()=>this.setState(s=>{const chars=s.chars.map(c=>c.state==='waiting'?Object.assign({},c,{state:'type',tool:'承認 → 作業再開'}):c);const log=[{t:this.timeStr(s.tick),txt:'承認: すべての待ちを解除しました'}].concat(s.log).slice(0,7);return{chars,log};}),
       togglePause:()=>this.setState(s=>({simPaused:!s.simPaused})),
       pauseLabel:st.simPaused?'▶ 再開する':'■ 一旦ストップ',
-      makeReport:()=>this.setState(s=>({log:[{t:this.timeStr(s.tick),txt:secName+'が進捗レポートを作成しました'}].concat(s.log).slice(0,7)})),
+      makeReport:()=>this.setState(s=>({log:[{t:this.timeStr(s.tick),txt:(st.floor==='nebula'?'ミナト':'ハナ')+'が進捗レポートを作成しました'}].concat(s.log).slice(0,7)})),
       freeLook:()=>this.setState({focusId:null}),
       rooms,furniture,chars,links,hover,sessions,waiting,log:st.log.map((e,i)=>({key:i,t:e.t,txt:e.txt})),
       sessionCount:fchars.length,hasWaiting:waitingAll.length>0,noWaiting:waitingAll.length===0,waitingCount:waitingAll.length,
       clockStr:this.timeStr(st.tick),
-      toggleSound:()=>this.setState(s=>({sound:!s.sound})),soundLabel:st.sound?'ON':'OFF',soundBg:st.sound?'#7ef29a':'#3a2c1c',soundFg:st.sound?'#241a10':'#b39b78',
+      toggleSound:()=>this.setState(s=>({sound:!s.sound})),soundLabel:st.sound?'ON':'OFF',soundBg:st.sound?'#7ef29a':'#1a1f3a',soundFg:st.sound?'#0b0d18':'#9aa0b8',
       replayMax:this.SCEN.length-1,replayPos:Math.max(0,Math.min(st.step,this.SCEN.length-1)),
       onSeek:e=>this.seek(+e.target.value),
       togglePlay:()=>this.setState(s=>{const atEnd=s.step>=this.SCEN.length-1;if(!s.playing&&atEnd){setTimeout(()=>this.seek(0),0);return{playing:true,step:-1};}return{playing:!s.playing};},()=>this.schedule()),
