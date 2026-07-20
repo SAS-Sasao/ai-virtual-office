@@ -1,6 +1,7 @@
 node_modules/
 .next/
 .next-verify/
+settings.json.ai-office-backup-*
 dist/
 build/
 out/

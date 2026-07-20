@@ -129,9 +129,17 @@ ai-virtual-office/
 │   │   └── src/layout.ts       ← OfficeLayout / Character 型（間取り・住人定義）
 │   ├── relay/                  ← ローカル常駐 CLI（npx ai-office-relay）
 │   │   └── src/
-│   │       ├── server.ts       ← POST /hooks/:sessionId 受信
+│   │       ├── server.ts       ← POST /hooks/:event 受信 + GET /health（観測統計）
 │   │       ├── normalize.ts    ← Claude hooks JSON → OfficeEvent 変換
-│   │       └── forward.ts      ← ローカル/クラウドへの転送・再送バッファ
+│   │       ├── seq.ts          ← シーケンス番号の永続採番
+│   │       ├── buffer.ts       ← 再送バッファ
+│   │       └── forward.ts      ← ローカル/クラウドへの転送
+│   ├── cli/                    ← 設定管理 CLI（npx ai-office setup/doctor/teardown）
+│   │   └── src/                  ※依存ゼロ。Relay（常駐プロセス）とは責務が別
+│   │       ├── merge.ts        ← settings.json への安全マージ・除去（純粋関数）
+│   │       ├── setup.ts        ← hooks 導入（バックアップ・TOCTOU 検証・アトミック書込）
+│   │       ├── teardown.ts     ← マーカー付きのみ除去（痕跡ゼロ）
+│   │       └── doctor.ts       ← 導入状態 / Relay 疎通 / イベント到達 / 競合の診断
 │   └── cc-sier-adapter/        ← CC-SIer 組織インポータ（§10、コア要件）
 │       └── src/
 │           ├── import-org.ts   ← masters/*.md → OfficeLayout + Character[] 生成
@@ -155,34 +163,42 @@ ai-virtual-office/
 
 ### 6.1 Hooks 設定（主系）
 
-利用者の `~/.claude/settings.json`（全プロジェクト対象）またはプロジェクトの `.claude/settings.json` に追記する:
+**手書きではなく `npx ai-office setup` で導入する**（要件 §5.1。`packages/cli` が実装）。CLI は既存 hooks を壊さずマーカー `#ai-office:cli` 付きで追記し、`npx ai-office teardown` がマーカー付きのみを除去する。以下は CLI が生成する内容（利用者の `~/.claude/settings.json`、または `--project` でプロジェクトの `.claude/settings.json`）:
 
 ```json
 {
   "hooks": {
     "SessionStart": [
       { "hooks": [ { "type": "command",
-        "command": "curl -s -X POST http://localhost:4100/hooks/session-start -H 'Content-Type: application/json' -d @- --max-time 2 || true" } ] }
+        "command": "curl -s -X POST http://localhost:4100/hooks/session-start -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office:cli" } ] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [ { "type": "command",
+        "command": "curl -s -X POST http://localhost:4100/hooks/user-prompt -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office:cli" } ] }
     ],
     "PreToolUse": [
       { "matcher": "*", "hooks": [ { "type": "command",
-        "command": "curl -s -X POST http://localhost:4100/hooks/pre-tool -H 'Content-Type: application/json' -d @- --max-time 2 || true" } ] }
+        "command": "curl -s -X POST http://localhost:4100/hooks/pre-tool -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office:cli" } ] }
     ],
     "PostToolUse": [
       { "matcher": "*", "hooks": [ { "type": "command",
-        "command": "curl -s -X POST http://localhost:4100/hooks/post-tool -H 'Content-Type: application/json' -d @- --max-time 2 || true" } ] }
+        "command": "curl -s -X POST http://localhost:4100/hooks/post-tool -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office:cli" } ] }
     ],
     "Notification": [
       { "hooks": [ { "type": "command",
-        "command": "curl -s -X POST http://localhost:4100/hooks/notification -H 'Content-Type: application/json' -d @- --max-time 2 || true" } ] }
+        "command": "curl -s -X POST http://localhost:4100/hooks/notification -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office:cli" } ] }
     ],
     "Stop": [
       { "hooks": [ { "type": "command",
-        "command": "curl -s -X POST http://localhost:4100/hooks/stop -H 'Content-Type: application/json' -d @- --max-time 2 || true" } ] }
+        "command": "curl -s -X POST http://localhost:4100/hooks/stop -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office:cli" } ] }
     ],
     "SubagentStop": [
       { "hooks": [ { "type": "command",
-        "command": "curl -s -X POST http://localhost:4100/hooks/subagent-stop -H 'Content-Type: application/json' -d @- --max-time 2 || true" } ] }
+        "command": "curl -s -X POST http://localhost:4100/hooks/subagent-stop -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office:cli" } ] }
+    ],
+    "SessionEnd": [
+      { "hooks": [ { "type": "command",
+        "command": "curl -s -X POST http://localhost:4100/hooks/session-end -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office:cli" } ] }
     ]
   }
 }
@@ -192,6 +208,8 @@ ai-virtual-office/
 
 - hook の stdin には `session_id` / `transcript_path` / `cwd` / `hook_event_name` / `tool_name` / `tool_input` 等の JSON が渡る。`-d @-` で丸ごと Relay へ転送し、**正規化は Relay 側で行う**（settings.json 側のロジックは最小に保つ）
 - **`--max-time 2 || true` は必須**。Relay が起動していない時に Claude Code の動作をブロック・失敗させないため（hooks の exit code 2 はツール実行をブロックするので絶対に返さない）
+- **matcher**: `PreToolUse` / `PostToolUse` のみ `"*"` を指定し、他の 6 イベントは matcher キーを持たない。要件 §5.2 が別掲する `PreToolUse (matcher: Task)`（サブエージェント生成）は、`matcher: "*"` 1 本 + `packages/relay/src/normalize.ts` の `tool_input.subagent_type` 抽出で充足するため、専用エントリは設けない
+- **マーカー `#ai-office:cli`** は teardown が「CLI が導入した hook」だけを識別するためのもの。手書きで追記する場合はマーカーを付けない（付けると teardown で消える）
 - どの hook をどう可視化に使うかは §7 のマッピング表を参照
 
 ### 6.2 Transcript ポーリング（保険系）

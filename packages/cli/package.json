@@ -1,0 +1,27 @@
+{
+  "name": "ai-office",
+  "version": "0.0.0",
+  "description": "Claude Code hooks を ai-virtual-office Relay に配線する設定管理 CLI（setup / doctor / teardown）",
+  "type": "module",
+  "bin": {
+    "ai-office": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc && chmod +x dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@ai-office/relay": "workspace:*",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.0.0"
+  }
+}

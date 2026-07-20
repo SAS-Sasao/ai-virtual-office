@@ -64,6 +64,22 @@ curl -N http://localhost:3001/api/stream
 
 応答が `{"ok":true,"ignored":false}` なら反映されている（`ignored:true` は正規化できなかった = 貼り付け崩れ・JSON 不正・宛先とペイロード形式の不一致）。
 
+### 他のプロジェクトを観測する（setup CLI）
+
+観測したいプロジェクトへ hooks を導入するには、手書きではなく CLI を使う:
+
+```bash
+npx ai-office setup            # ~/.claude/settings.json に hooks を安全にマージ（全プロジェクト観測）
+npx ai-office setup --project  # カレントの .claude/settings.json に限定導入
+npx ai-office setup --dry-run  # 差分表示のみ（書き込まない）
+npx ai-office doctor           # 導入状態 / Relay 疎通 / イベント到達 / 競合を診断
+npx ai-office teardown         # 導入した hooks だけを除去（他の hooks は温存・痕跡ゼロ）
+```
+
+- **既存の hooks を壊さない**: 自分が入れた分だけに `#ai-office:cli` マーカーを付け、teardown はマーカー付きのみ除去する。書き込み前にバックアップを取り、teardown 成功時に削除する
+- **doctor の exit code**: hooks 未導入 / Relay 不通のときだけ 1。**イベント未受信は警告**（setup 直後は正常な状態のため）
+- **このリポジトリ自身には使わない**: `.claude/settings.json` は手書き管理しているため、CLI は本リポジトリを検出すると中断する（`--force` で上書き可）
+
 ### 実セッションの観測（dogfooding）
 
 本リポジトリの `.claude/settings.json` には観測 hooks（A 系統・`#ai-office` マーカー付き）が配線済みで、**このリポジトリで Claude Code を使うと自動で `http://localhost:4100/hooks/{event}`（Relay）にイベントが飛ぶ**（Relay 停止中は `--max-time 2 || true` で無害に失敗し、Claude Code を一切ブロックしない = NFR-2）。設定変更後の hooks はセッション再起動で有効になる。

@@ -200,7 +200,7 @@ describe("POST /hooks/:event wired with a RetryBuffer (as cli.ts does)", () => {
 });
 
 describe("GET /health", () => {
-  it("pid / testMode / version / port を返す", async () => {
+  it("pid / testMode / version / port / receivedCount / lastEventAt を返す", async () => {
     const { app } = makeServer({ testMode: true, version: "1.2.3", getPort: () => 4100 });
 
     const res = await app.request("http://localhost/health");
@@ -212,6 +212,120 @@ describe("GET /health", () => {
       testMode: true,
       pid: process.pid,
       port: 4100,
+      receivedCount: 0,
+      lastEventAt: null,
     });
+  });
+});
+
+describe("GET /health の観測統計（receivedCount / lastEventAt）", () => {
+  it("初期状態では receivedCount: 0 / lastEventAt: null を返す", async () => {
+    const { app } = makeServer();
+
+    const res = await app.request("http://localhost/health");
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      ok: true,
+      version: "0.0.0",
+      testMode: false,
+      pid: process.pid,
+      port: 0,
+      receivedCount: 0,
+      lastEventAt: null,
+    });
+  });
+
+  it("/hooks/pre-tool に正常なイベントを POST すると receivedCount: 1 / lastEventAt が注入した now と一致する", async () => {
+    const { app } = makeServer();
+
+    await app.request(postJson("/hooks/pre-tool", HOOK_BODY_FOR["pre-tool"]));
+
+    const res = await app.request("http://localhost/health");
+    await expect(res.json()).resolves.toEqual({
+      ok: true,
+      version: "0.0.0",
+      testMode: false,
+      pid: process.pid,
+      port: 0,
+      receivedCount: 1,
+      lastEventAt: NOW,
+    });
+  });
+
+  it("2 件目の正常なイベントで receivedCount: 2 になる", async () => {
+    const { app } = makeServer();
+
+    await app.request(postJson("/hooks/pre-tool", HOOK_BODY_FOR["pre-tool"]));
+    await app.request(postJson("/hooks/stop", HOOK_BODY_FOR.stop));
+
+    const res = await app.request("http://localhost/health");
+    const body = (await res.json()) as { receivedCount: number; lastEventAt: number | null };
+    expect(body.receivedCount).toBe(2);
+    expect(body.lastEventAt).toBe(NOW);
+  });
+
+  it("未知 slug では receivedCount が増えない", async () => {
+    const { app } = makeServer();
+
+    await app.request(
+      postJson("/hooks/unknown-event", { hook_event_name: "Stop", session_id: "s1" }),
+    );
+
+    const res = await app.request("http://localhost/health");
+    const body = (await res.json()) as { receivedCount: number; lastEventAt: number | null };
+    expect(body.receivedCount).toBe(0);
+    expect(body.lastEventAt).toBeNull();
+  });
+
+  it("不正 JSON body では receivedCount が増えない", async () => {
+    const { app } = makeServer();
+
+    await app.request(postJson("/hooks/pre-tool", "{not valid json"));
+
+    const res = await app.request("http://localhost/health");
+    const body = (await res.json()) as { receivedCount: number; lastEventAt: number | null };
+    expect(body.receivedCount).toBe(0);
+    expect(body.lastEventAt).toBeNull();
+  });
+
+  it("normalize が null を返すイベントでは receivedCount が増えない", async () => {
+    const { app } = makeServer();
+
+    // session_id が欠落 -> normalizeHookEvent は null を返す
+    await app.request(
+      postJson("/hooks/pre-tool", { hook_event_name: "PreToolUse", tool_name: "Edit" }),
+    );
+
+    const res = await app.request("http://localhost/health");
+    const body = (await res.json()) as { receivedCount: number; lastEventAt: number | null };
+    expect(body.receivedCount).toBe(0);
+    expect(body.lastEventAt).toBeNull();
+  });
+
+  it("GET /health を叩いても receivedCount は増えない", async () => {
+    const { app } = makeServer();
+
+    await app.request("http://localhost/health");
+    await app.request("http://localhost/health");
+
+    const res = await app.request("http://localhost/health");
+    const body = (await res.json()) as { receivedCount: number; lastEventAt: number | null };
+    expect(body.receivedCount).toBe(0);
+    expect(body.lastEventAt).toBeNull();
+  });
+
+  it("POST /test/inject（testMode=true）で受理されても receivedCount は増えない", async () => {
+    const { app } = makeServer({ testMode: true });
+
+    const res = await app.request(
+      postJson("/test/inject", [{ type: "session_start", sessionId: "s1", ts: 1 }]),
+    );
+    expect(res.status).toBe(200);
+
+    const healthRes = await app.request("http://localhost/health");
+    const body = (await healthRes.json()) as { receivedCount: number; lastEventAt: number | null };
+    expect(body.receivedCount).toBe(0);
+    expect(body.lastEventAt).toBeNull();
   });
 });

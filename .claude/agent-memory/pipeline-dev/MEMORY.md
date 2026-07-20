@@ -7,3 +7,5 @@
 - [m1-2a-relay-persistence](project_m1_2a_relay_persistence.md) — relay永続化: forward契約変更をEventSink分離で吸収・seqブロック予約のENOENT区別と自己回復・buffer再送のsleep無しテスト技法
 - [m1-2a-web-db-persistence](project_m1_2a_web_db_persistence.md) — web/db永続化: .js拡張子はnext buildでのみ検出される罠・NEXT_DIST_DIR副作用の後始末・prune-on-init設計
 - [m1-2a-phase3-review-fixes](project_m1_2a_phase3_review_fixes.md) — buffer.ts drain再入修正・events.ts順序規則再実装・next buildが本番DBを汚す未対応の発見
+- [m1-2b-relay-health-stats](project_m1_2b_relay_health_stats.md) — /health にreceivedCount/lastEventAt追加: なぜ/test/injectを使わないか・stats.tsのDIパターン・toEqual拡張作法
+- [m1-2b-cli-setup-doctor-teardown](project_m1_2b_cli_setup_doctor_teardown.md) — packages/cli新規作成+Phase3レビュー9件修正: マーカーは完全一致のみで判定・removeHooksはhooksキー条件付き削除・空グループはmergeHooks側で保護・npx symlinkはstdout内容まで検証必須
