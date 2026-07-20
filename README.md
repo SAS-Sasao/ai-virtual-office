@@ -40,17 +40,22 @@ pnpm dev   # apps/web を http://localhost:3001 で起動（next dev -p 3001）
 
 ### イベントを手動注入して動作確認する
 
-サーバ起動中に別ターミナルから:
+サーバ起動中に別ターミナルから（**各コマンドは 1 行のまま貼り付けること**。行継続 `\` 入りの複数行を空行込みで貼るとボディ無し POST になり `ignored:true` が返る）:
 
 ```bash
 # ツール実行イベントを注入（キャラが出現し「編集」色 #7ef29a になる）
-curl -s -X POST http://localhost:3001/api/ingest \
-  -H 'Content-Type: application/json' \
-  -d '{"hook_event_name":"PreToolUse","session_id":"demo-1","tool_name":"Edit","tool_input":{"file_path":"/tmp/demo.ts"}}'
+curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d '{"hook_event_name":"PreToolUse","session_id":"demo-1","tool_name":"Edit","tool_input":{"file_path":"/tmp/demo.ts"}}'
+
+# 状態遷移を見る: 端末（紫）→ 許可待ち（黄・点滅）→ 完了（白）
+curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d '{"hook_event_name":"PreToolUse","session_id":"demo-1","tool_name":"Bash","tool_input":{}}'
+curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d '{"hook_event_name":"Notification","session_id":"demo-1"}'
+curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d '{"hook_event_name":"Stop","session_id":"demo-1"}'
 
 # SSE ストリームを直接覗く（別ターミナルで）
 curl -N http://localhost:3001/api/stream
 ```
+
+応答が `{"ok":true,"ignored":false}` なら反映されている（`ignored:true` はボディが正規化できなかった = 貼り付け崩れか JSON 不正）。
 
 ### 実セッションの観測（dogfooding）
 
