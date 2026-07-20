@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { OfficeState } from "./office-state";
-import type { OfficeEvent } from "./protocol";
+import type { OfficeEvent } from "@ai-office/protocol";
 
 function ev(partial: Partial<OfficeEvent> & Pick<OfficeEvent, "type" | "sessionId" | "ts">): OfficeEvent {
   return partial;

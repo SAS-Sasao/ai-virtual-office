@@ -1,3 +1,6 @@
 - [normalize-whitelist-pattern](feedback_normalize_whitelist_pattern.md) — normalizeHookEvent はホワイトリスト方式必須。ブラックリスト delete 方式は禁止
 - [hooks-normalize-test-cases](project_hooks_normalize_test_cases.md) — normalize.test.ts に必須の機微漏洩検出ケース一覧（M0 で確立）
 - [ingest-stream-reliability-m0](project_ingest_stream_reliability.md) — ingest 常時200・bus.ts globalThis シングルトン理由・SSE ヘッダ設定の判断根拠
+- [m1-1-protocol-extraction](project_m1_1_protocol_extraction.md) — packages/protocol 新規作成: dist公開の理由(N1)・CharacterStateSchema統一・seq順序規約・未知キーstrip検証法
+- [m1-1-relay-creation](project_m1_1_relay_creation.md) — packages/relay 新規作成: NFR-2実機検証(web未起動でも200)・--port0のgetPort DIパターン・dist/cli.jsのchmod+x未実施・inject全件検証
+- [m1-1-web-adapt](project_m1_1_web_adapt.md) — apps/web追従: typecheck-touchedフックとBash/Edit使い分け・NEXT_DIST_DIR副作用(tsconfig.json/next-env.d.ts自動書換)・vitest include漏れ注意

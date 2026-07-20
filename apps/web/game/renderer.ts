@@ -1,4 +1,4 @@
-import type { CharacterState } from "./protocol";
+import type { CharacterState } from "@ai-office/protocol";
 import type { OfficeState } from "./office-state";
 
 // アーキ設計 §4 のとおり、描画ロジックは単体テスト対象外として割り切る

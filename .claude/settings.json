@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
+            "command": "curl -s -X POST http://localhost:4100/hooks/session-start -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
           }
         ]
       }
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
+            "command": "curl -s -X POST http://localhost:4100/hooks/user-prompt -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
           }
         ]
       }
@@ -37,7 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
+            "command": "curl -s -X POST http://localhost:4100/hooks/pre-tool -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
           }
         ]
       }
@@ -61,7 +61,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
+            "command": "curl -s -X POST http://localhost:4100/hooks/post-tool -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
           }
         ]
       }
@@ -71,7 +71,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
+            "command": "curl -s -X POST http://localhost:4100/hooks/notification -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
           }
         ]
       }
@@ -81,7 +81,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
+            "command": "curl -s -X POST http://localhost:4100/hooks/stop -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/verify/gate-protocol-consumers.sh"
           }
         ]
       }
@@ -91,7 +99,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
+            "command": "curl -s -X POST http://localhost:4100/hooks/subagent-stop -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
           }
         ]
       }
@@ -101,7 +109,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
+            "command": "curl -s -X POST http://localhost:4100/hooks/session-end -H 'Content-Type: application/json' -d @- --max-time 2 || true #ai-office"
           }
         ]
       }

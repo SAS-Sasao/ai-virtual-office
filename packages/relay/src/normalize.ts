@@ -1,4 +1,4 @@
-import { OfficeEventSchema, type OfficeEvent } from "../game/protocol";
+import { OfficeEventSchema, type OfficeEvent } from "@ai-office/protocol";
 
 /**
  * Claude Code hooks の hook_event_name → OfficeEvent.type 対応表。

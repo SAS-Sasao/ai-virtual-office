@@ -1,4 +1,4 @@
-import type { CharacterState } from "./protocol";
+import type { CharacterState } from "@ai-office/protocol";
 
 /**
  * ツール名からキャラクター状態への純粋関数マッピング。

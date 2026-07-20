@@ -1,4 +1,4 @@
-import type { OfficeEvent } from "../game/protocol";
+import type { OfficeEvent } from "@ai-office/protocol";
 
 export type OfficeEventListener = (ev: OfficeEvent) => void;
 

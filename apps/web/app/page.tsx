@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { attachDebug } from "../game/debug";
 import { OfficeState } from "../game/office-state";
-import { OfficeEventSchema } from "../game/protocol";
+import { OfficeEventSchema } from "@ai-office/protocol";
 import { startRenderer } from "../game/renderer";
 
 // デザイントークン（docs/design/ui/README.md 抽出仕様1）。

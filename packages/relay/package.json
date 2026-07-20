@@ -1,25 +1,27 @@
 {
-  "name": "web",
+  "name": "@ai-office/relay",
   "private": true,
   "version": "0.0.0",
+  "type": "module",
+  "bin": {
+    "ai-office-relay": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "dev": "next dev -p 3001",
-    "build": "next build",
-    "start": "next start -p 3001",
+    "build": "tsc && chmod +x dist/cli.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
     "@ai-office/protocol": "workspace:*",
-    "next": "^15.3.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "@hono/node-server": "^2.0.0",
+    "hono": "^4.12.0",
     "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
     "typescript": "^5.8.0",
     "vitest": "^3.0.0"
   }

@@ -28,10 +28,13 @@ pnpm install
 
 環境の検証・構築を Claude Code に任せる場合は [docs/dev-environment.md](docs/dev-environment.md)（AI 指示書。マイルストーン別の要否と現状ギャップを整理）を読ませて実行させる。
 
-## 起動とローカルアクセス（M0 PoC）
+## 起動とローカルアクセス
+
+**2 プロセス構成**（NFR-5）。別々のターミナルで起動する:
 
 ```bash
-pnpm dev   # apps/web を http://localhost:3001 で起動（next dev -p 3001）
+pnpm dev     # ① apps/web を http://localhost:3001 で起動（next dev -p 3001）
+pnpm relay   # ② Relay を http://localhost:4100 で起動（hooks の唯一の宛先。protocol/relay を build してから起動する）
 ```
 
 - **アクセス方法（本開発環境 = WSL2 Ubuntu 22.04）**: WSL2 の localhost フォワーディングにより、**Windows 側のブラウザから `http://localhost:3001`** を開く。WSL 内からの疎通確認は `curl -s http://localhost:3001/`
@@ -40,26 +43,30 @@ pnpm dev   # apps/web を http://localhost:3001 で起動（next dev -p 3001）
 
 ### イベントを手動注入して動作確認する
 
-サーバ起動中に別ターミナルから（**各コマンドは 1 行のまま貼り付けること**。行継続 `\` 入りの複数行を空行込みで貼るとボディ無し POST になり `ignored:true` が返る）:
+起動中に別ターミナルから（**各コマンドは 1 行のまま貼り付けること**。行継続 `\` 入りの複数行を空行込みで貼るとボディ無し POST になり `ignored:true` が返る）:
 
 ```bash
-# ツール実行イベントを注入（キャラが出現し「編集」色 #7ef29a になる）
-curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d '{"hook_event_name":"PreToolUse","session_id":"demo-1","tool_name":"Edit","tool_input":{"file_path":"/tmp/demo.ts"}}'
+# ① Relay 経由（本番と同じ経路。生 hooks JSON を投げる → Relay が正規化・seq 採番して web へ転送）
+curl -s -X POST http://localhost:4100/hooks/pre-tool -H 'Content-Type: application/json' -d '{"hook_event_name":"PreToolUse","session_id":"demo-1","tool_name":"Edit","tool_input":{"file_path":"/tmp/demo.ts"}}'
 
 # 状態遷移を見る: 端末（紫）→ 許可待ち（黄・点滅）→ 完了（白）
-curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d '{"hook_event_name":"PreToolUse","session_id":"demo-1","tool_name":"Bash","tool_input":{}}'
-curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d '{"hook_event_name":"Notification","session_id":"demo-1"}'
-curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d '{"hook_event_name":"Stop","session_id":"demo-1"}'
+curl -s -X POST http://localhost:4100/hooks/pre-tool -H 'Content-Type: application/json' -d '{"hook_event_name":"PreToolUse","session_id":"demo-1","tool_name":"Bash","tool_input":{}}'
+curl -s -X POST http://localhost:4100/hooks/notification -H 'Content-Type: application/json' -d '{"hook_event_name":"Notification","session_id":"demo-1"}'
+curl -s -X POST http://localhost:4100/hooks/stop -H 'Content-Type: application/json' -d '{"hook_event_name":"Stop","session_id":"demo-1"}'
+
+# ② web 単体で確認する場合（Relay を起動していないとき）。/api/ingest は
+#    正規化済み OfficeEvent のみ受理する（生 hooks JSON は ignored になる）
+curl -s -X POST http://localhost:3001/api/ingest -H 'Content-Type: application/json' -d '{"type":"pre_tool","sessionId":"demo-2","toolName":"Edit","fileBase":"demo.ts","ts":1784500000000}'
 
 # SSE ストリームを直接覗く（別ターミナルで）
 curl -N http://localhost:3001/api/stream
 ```
 
-応答が `{"ok":true,"ignored":false}` なら反映されている（`ignored:true` はボディが正規化できなかった = 貼り付け崩れか JSON 不正）。
+応答が `{"ok":true,"ignored":false}` なら反映されている（`ignored:true` は正規化できなかった = 貼り付け崩れ・JSON 不正・宛先とペイロード形式の不一致）。
 
 ### 実セッションの観測（dogfooding）
 
-本リポジトリの `.claude/settings.json` には観測 hooks（A 系統・`#ai-office` マーカー付き）が配線済みで、**このリポジトリで Claude Code を使うと自動で `http://localhost:3001/api/ingest` にイベントが飛ぶ**（サーバ停止中は `--max-time 2 || true` で無害に失敗し、Claude Code を一切ブロックしない = NFR-2）。設定変更後の hooks はセッション再起動で有効になる。
+本リポジトリの `.claude/settings.json` には観測 hooks（A 系統・`#ai-office` マーカー付き）が配線済みで、**このリポジトリで Claude Code を使うと自動で `http://localhost:4100/hooks/{event}`（Relay）にイベントが飛ぶ**（Relay 停止中は `--max-time 2 || true` で無害に失敗し、Claude Code を一切ブロックしない = NFR-2）。設定変更後の hooks はセッション再起動で有効になる。
 
 > 注: 観測 hooks（A 系統・インライン curl）は要件 §5.2 準拠。`.claude/hooks/verify/*.sh` を呼ぶ検証 hooks（B 系統・違反時にブロック）とは別系統であり、`.claude/rules/shell.md` の系統区別を参照。
 
