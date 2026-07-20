@@ -51,6 +51,21 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.13.3)
 
+  packages/cli:
+    devDependencies:
+      '@ai-office/relay':
+        specifier: workspace:*
+        version: link:../relay
+      '@types/node':
+        specifier: ^24.0.0
+        version: 24.13.3
+      typescript:
+        specifier: ^5.8.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.3)
+
   packages/protocol:
     dependencies:
       zod:

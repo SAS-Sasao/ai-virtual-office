@@ -36,7 +36,7 @@ pnpm build   # 全パッケージビルド（pnpm -r run build）
 pnpm test    # vitest（pnpm -r run test）
 ```
 
-実装済み: hooks → **Relay `:4100/hooks/{event}`**（正規化・機微破棄・seq 採番）→ web `/api/ingest`（正規化済み OfficeEvent のみ受理）→ SSE `/api/stream` → Canvas 描画。**スキーマの正本は `packages/protocol`**（`z.infer` で型導出。再定義禁止）。protocol 変更時は `/protocol-change` スキルの手順に従うこと（Stop hook `gate-protocol-consumers` が relay/web 両テストを機械的に強制する）。
+実装済み: hooks → **Relay `:4100/hooks/{event}`**（正規化・機微破棄・seq 採番・再送バッファ）→ web `/api/ingest`（正規化済み OfficeEvent のみ受理・SQLite 永続化）→ SSE `/api/stream`（再接続時に状態復元）→ Canvas 描画。観測対象プロジェクトへの hooks 導入は **`npx ai-office setup / doctor / teardown`**（`packages/cli`）。**本リポジトリの `.claude/settings.json` は手書き管理**であり CLI の対象外（CLI 側にガードあり）。**スキーマの正本は `packages/protocol`**（`z.infer` で型導出。再定義禁止）。protocol 変更時は `/protocol-change` スキルの手順に従うこと（Stop hook `gate-protocol-consumers` が relay/web 両テストを機械的に強制する）。
 
 ## リポジトリ構成
 

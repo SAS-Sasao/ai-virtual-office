@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { OfficeEventSchema, type OfficeEvent } from "@ai-office/protocol";
 import { normalizeHookEvent } from "./normalize.js";
 import { createSeqCounter } from "./seq.js";
+import { createStatsCounter, type StatsCounter } from "./stats.js";
 
 /**
  * 正規化済み OfficeEvent を下流（web の /api/ingest、または再送バッファ）へ
@@ -46,6 +47,13 @@ export interface CreateServerOptions {
   version?: string;
   /** GET /health が返す port を取得する関数。--port 0 で実ポートが後から確定するため関数注入。 */
   getPort?: () => number;
+  /**
+   * GET /health が公開する観測統計（receivedCount / lastEventAt）の DI（既定は
+   * createStatsCounter()）。ai-office doctor がイベント到達を診断するために使う
+   * （M1-2b 設計メモ）。POST /hooks/:event で正規化に成功したときのみ記録し、
+   * GET /health の閲覧や POST /test/inject の受理では記録しない。
+   */
+  stats?: StatsCounter;
 }
 
 /**
@@ -60,6 +68,7 @@ export function createServer(options: CreateServerOptions): Hono {
     testMode = false,
     version = "0.0.0",
     getPort = () => 0,
+    stats = createStatsCounter(),
   } = options;
 
   const app = new Hono();
@@ -80,10 +89,17 @@ export function createServer(options: CreateServerOptions): Hono {
       return c.json({ ok: true, ignored: true });
     }
 
-    const normalized = normalizeHookEvent(raw, now());
+    const ts = now();
+    const normalized = normalizeHookEvent(raw, ts);
     if (!normalized) {
       return c.json({ ok: true, ignored: true });
     }
+
+    // GET /health の receivedCount / lastEventAt（観測統計）は「正規化に成功した」
+    // イベントのみを数える。forward の成否には依存しない（forward 失敗時も
+    // RetryBuffer が再送を担い、hooks 到達自体はここで確定しているため）。
+    // POST /test/inject 経由の受理はここを通らないため含まれない（意図どおり）。
+    stats.record(ts);
 
     const event: OfficeEvent = { ...normalized, seq: nextSeq() };
 
@@ -141,12 +157,15 @@ export function createServer(options: CreateServerOptions): Hono {
   });
 
   app.get("/health", (c) => {
+    const { receivedCount, lastEventAt } = stats.snapshot();
     return c.json({
       ok: true,
       version,
       testMode,
       pid: process.pid,
       port: getPort(),
+      receivedCount,
+      lastEventAt,
     });
   });
 
