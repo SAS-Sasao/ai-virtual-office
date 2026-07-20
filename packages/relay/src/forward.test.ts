@@ -9,14 +9,14 @@ const EVENT: OfficeEvent = {
 };
 
 describe("createForwarder", () => {
-  it("POSTs the event as JSON to the configured URL", async () => {
+  it("POSTs the event as JSON to the configured URL and resolves true on 2xx", async () => {
     const fetchImpl = vi.fn(
       async (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> =>
         new Response(null, { status: 200 }),
     );
     const forward = createForwarder({ url: "http://localhost:3001/api/ingest", fetchImpl });
 
-    await forward(EVENT);
+    await expect(forward(EVENT)).resolves.toBe(true);
 
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     const [url, init] = fetchImpl.mock.calls[0];
@@ -25,7 +25,7 @@ describe("createForwarder", () => {
     expect(JSON.parse(init?.body as string)).toEqual(EVENT);
   });
 
-  it("does not throw when fetch rejects (network error) — NFR-2 defense in depth", async () => {
+  it("resolves false (does not throw) when fetch rejects (network error) — NFR-2 defense in depth", async () => {
     const fetchImpl = vi.fn(
       async (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> => {
         throw new Error("network down");
@@ -33,17 +33,27 @@ describe("createForwarder", () => {
     );
     const forward = createForwarder({ url: "http://localhost:3001/api/ingest", fetchImpl });
 
-    await expect(forward(EVENT)).resolves.toBeUndefined();
+    await expect(forward(EVENT)).resolves.toBe(false);
   });
 
-  it("does not throw when the response is a non-2xx status", async () => {
+  it("resolves false (does not throw) when the response is a non-2xx status", async () => {
     const fetchImpl = vi.fn(
       async (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> =>
         new Response(null, { status: 500 }),
     );
     const forward = createForwarder({ url: "http://localhost:3001/api/ingest", fetchImpl });
 
-    await expect(forward(EVENT)).resolves.toBeUndefined();
+    await expect(forward(EVENT)).resolves.toBe(false);
+  });
+
+  it("resolves true for any 2xx status, not just exactly 200", async () => {
+    const fetchImpl = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit): Promise<Response> =>
+        new Response(null, { status: 204 }),
+    );
+    const forward = createForwarder({ url: "http://localhost:3001/api/ingest", fetchImpl });
+
+    await expect(forward(EVENT)).resolves.toBe(true);
   });
 
   it("defaults fetchImpl to globalThis.fetch when not provided", () => {

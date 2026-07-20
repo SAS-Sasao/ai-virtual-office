@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { OfficeEvent } from "@ai-office/protocol";
 import { createServer, type CreateServerOptions } from "./server.js";
+import { createRetryBuffer } from "./buffer.js";
 
 const NOW = 1_700_000_000_000;
 
@@ -169,6 +170,32 @@ describe("POST /test/inject", () => {
 
     expect(res.status).toBe(400);
     expect(forwarded).toHaveLength(0);
+  });
+});
+
+describe("POST /hooks/:event wired with a RetryBuffer (as cli.ts does)", () => {
+  it("returns 200 even when the underlying forward always fails, and buffers the event for retry", async () => {
+    const forward = vi.fn(async () => false);
+    const buffer = createRetryBuffer({ forward, scheduleTimer: () => {} });
+    const { app } = makeServer({ forward: buffer.send });
+
+    const res = await app.request(postJson("/hooks/pre-tool", HOOK_BODY_FOR["pre-tool"]));
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ ok: true, ignored: false });
+    expect(forward).toHaveBeenCalledTimes(1);
+    expect(buffer.size()).toBe(1);
+  });
+
+  it("does not buffer when the underlying forward succeeds", async () => {
+    const forward = vi.fn(async () => true);
+    const buffer = createRetryBuffer({ forward, scheduleTimer: () => {} });
+    const { app } = makeServer({ forward: buffer.send });
+
+    const res = await app.request(postJson("/hooks/pre-tool", HOOK_BODY_FOR["pre-tool"]));
+
+    expect(res.status).toBe(200);
+    expect(buffer.size()).toBe(0);
   });
 });
 

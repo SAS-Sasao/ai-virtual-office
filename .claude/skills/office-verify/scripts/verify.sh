@@ -85,10 +85,16 @@ relay_cli="packages/relay/dist/cli.js"
 if [[ -f "$relay_cli" ]]; then
   echo "[step] Relay ヘルスチェック（ephemeral port）"
   relay_log=$(mktemp)
-  node "$relay_cli" --port 0 --forward "http://127.0.0.1:1/unused" > "$relay_log" 2>&1 &
+  # 状態ファイル（seq / DB）も一時ディレクトリへ隔離する。既定のままだと検証のたびに
+  # dogfooding 中の Relay と共有する ~/.ai-office/relay-seq.json から seq ブロックを
+  # 消費してしまう（ポートだけでなく状態ファイルも分離する）。
+  relay_state=$(mktemp -d)
+  AI_OFFICE_SEQ_PATH="$relay_state/relay-seq.json" \
+  AI_OFFICE_DB_PATH="$relay_state/events.db" \
+    node "$relay_cli" --port 0 --forward "http://127.0.0.1:1/unused" > "$relay_log" 2>&1 &
   relay_pid=$!
   # shellcheck disable=SC2064
-  trap "kill $relay_pid 2>/dev/null || true; rm -f $relay_log" EXIT
+  trap "kill $relay_pid 2>/dev/null || true; rm -f $relay_log; rm -rf $relay_state" EXIT
 
   relay_port=""
   for _ in $(seq 1 50); do
@@ -116,6 +122,7 @@ if [[ -f "$relay_cli" ]]; then
   kill "$relay_pid" 2>/dev/null || true
   wait "$relay_pid" 2>/dev/null || true
   rm -f "$relay_log"
+  rm -rf "$relay_state"
   trap - EXIT
 else
   echo "[note] $relay_cli が未ビルドのため Relay ヘルスチェックを実施していない（build 未実行 or 未実装）"

@@ -1,2 +1,3 @@
 - [TDD hook noise is expected](feedback_tdd_hook_noise.md) — typecheck-touched PostToolUse errors during red phase are noise, not a real failure, file is already written
 - [Task spec & report format](feedback_task_spec_and_report_format.md) — orchestrator specs are exhaustive/literal; report back with red/green evidence + typecheck result
+- [Ordering defense & tombstone (M1-2a)](project_ordering_defense_tombstone.md) — office-state.ts is now the sole owner of pipeline ordering guarantees; PRUNE_TIMEOUT_MS is shared with apps/web/db

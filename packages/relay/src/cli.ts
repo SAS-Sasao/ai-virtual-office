@@ -2,7 +2,8 @@
 import { serve } from "@hono/node-server";
 import { createServer } from "./server.js";
 import { createForwarder } from "./forward.js";
-import { createSeqCounter } from "./seq.js";
+import { createPersistentSeqCounter, resolveSeqPath } from "./seq.js";
+import { createRetryBuffer } from "./buffer.js";
 
 const DEFAULT_PORT = 4100;
 const DEFAULT_FORWARD_URL = "http://localhost:3001/api/ingest";
@@ -51,9 +52,20 @@ const testMode = process.env.AI_OFFICE_TEST_MODE === "1";
 // しか分からない。/health が正しい port を返せるよう getPort 経由で遅延参照する。
 let actualPort = desiredPort;
 
-const app = createServer({
+// forward（成否を boolean で返す）を直接 server に渡さず、RetryBuffer#send を挟む。
+// 失敗時はバッファに保持して指数バックオフで再送し、新規イベントは常に直送を試みる
+// （head-of-line ブロッキングを避け NFR-1 を守る。M1-2a 設計メモ N-2 参照）。
+const buffer = createRetryBuffer({
   forward: createForwarder({ url: forwardUrl }),
-  nextSeq: createSeqCounter(),
+});
+
+// seq は Relay 再起動をまたいで単調増加させる（ブロック予約方式の永続採番）。
+// 読み書きに失敗した場合は seq を採番しない（undefined。消費側は ts 昇順にフォールバック）。
+const nextSeq = createPersistentSeqCounter({ path: resolveSeqPath() });
+
+const app = createServer({
+  forward: buffer.send,
+  nextSeq,
   testMode,
   getPort: () => actualPort,
 });

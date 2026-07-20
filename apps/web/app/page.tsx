@@ -48,8 +48,25 @@ export default function OfficePage() {
 
     const source = new EventSource("/api/stream");
 
+    // restore（接続直後の直近状態復元）と live（通常配信）は同じ検証・適用経路
+    // を通す。順序防御（seq/ts 比較）は state.applyEvent 側（office-state.ts）
+    // に一本化されているため、ここでは単純に parse → applyEvent するだけでよい。
+    const applyRawEvent = (rawData: string): void => {
+      try {
+        const parsed = OfficeEventSchema.parse(JSON.parse(rawData));
+        state.applyEvent(parsed);
+      } catch {
+        // 不正な payload（parse 失敗）は無視する。ingest 側の不具合を
+        // UI に波及させない（NFR-2 と同じ思想）。
+      }
+    };
+
     source.addEventListener("hello", () => {
       setConnected(true);
+    });
+
+    source.addEventListener("restore", (event) => {
+      applyRawEvent((event as MessageEvent<string>).data);
     });
 
     source.onopen = () => {
@@ -61,13 +78,7 @@ export default function OfficePage() {
     };
 
     source.onmessage = (event) => {
-      try {
-        const parsed = OfficeEventSchema.parse(JSON.parse(event.data));
-        state.applyEvent(parsed);
-      } catch {
-        // 不正な payload（parse 失敗）は無視する。ingest 側の不具合を
-        // UI に波及させない（NFR-2 と同じ思想）。
-      }
+      applyRawEvent(event.data);
     };
 
     const pruneInterval = setInterval(() => {
