@@ -5,6 +5,7 @@
   "packageManager": "pnpm@9.0.0",
   "scripts": {
     "dev": "pnpm --filter web dev",
+    "relay": "pnpm --filter @ai-office/protocol build && pnpm --filter @ai-office/relay build && node packages/relay/dist/cli.js",
     "build": "pnpm -r run build",
     "test": "pnpm -r run test"
   }

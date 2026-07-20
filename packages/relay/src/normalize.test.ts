@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeHookEvent } from "./normalize";
+import { normalizeHookEvent } from "./normalize.js";
 
 const NOW = 1_700_000_000_000;
 

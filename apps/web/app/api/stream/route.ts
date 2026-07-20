@@ -1,5 +1,5 @@
 import { subscribe } from "../../../lib/bus";
-import type { OfficeEvent } from "../../../game/protocol";
+import type { OfficeEvent } from "@ai-office/protocol";
 
 // SSE はレスポンスをバッファリングさせず即時ストリーミングする必要があるため、
 // このルートは常に動的（force-dynamic）とする。

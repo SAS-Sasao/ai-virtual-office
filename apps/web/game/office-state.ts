@@ -1,5 +1,5 @@
 import { toolToState } from "./mapping";
-import type { CharacterState, OfficeEvent } from "./protocol";
+import type { CharacterState, OfficeEvent } from "@ai-office/protocol";
 
 export interface SessionCharacter {
   sessionId: string;
