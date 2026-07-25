@@ -211,6 +211,80 @@ describe("OfficeState.applyEvent ordering defense", () => {
   });
 });
 
+describe("OfficeState.applyEvent attribution passthrough", () => {
+  it("carries org/dept/role from an event into the snapshot", () => {
+    const state = new OfficeState();
+    state.applyEvent(
+      ev({
+        type: "session_start",
+        sessionId: "s1",
+        ts: 1000,
+        org: "domain-tech-collection",
+        dept: "dept-engineering",
+        role: "pipeline-dev",
+      }),
+    );
+
+    const session = state.getSnapshot().sessions.find((s) => s.sessionId === "s1");
+    expect(session).toMatchObject({
+      org: "domain-tech-collection",
+      dept: "dept-engineering",
+      role: "pipeline-dev",
+    });
+  });
+
+  it("keeps the previously known attribution when a later event omits it", () => {
+    const state = new OfficeState();
+    state.applyEvent(
+      ev({
+        type: "session_start",
+        sessionId: "s1",
+        ts: 1000,
+        org: "domain-tech-collection",
+        dept: "dept-engineering",
+        role: "pipeline-dev",
+      }),
+    );
+    state.applyEvent(ev({ type: "pre_tool", sessionId: "s1", toolName: "Edit", ts: 1100 }));
+
+    const session = state.getSnapshot().sessions.find((s) => s.sessionId === "s1");
+    expect(session).toMatchObject({
+      state: "type",
+      org: "domain-tech-collection",
+      dept: "dept-engineering",
+      role: "pipeline-dev",
+    });
+  });
+
+  it("leaves attribution undefined when no event ever carried it", () => {
+    const state = new OfficeState();
+    state.applyEvent(ev({ type: "session_start", sessionId: "s1", ts: 1000 }));
+
+    const session = state.getSnapshot().sessions.find((s) => s.sessionId === "s1");
+    expect(session?.org).toBeUndefined();
+    expect(session?.dept).toBeUndefined();
+    expect(session?.role).toBeUndefined();
+  });
+
+  it("updates attribution when a later event carries a different value", () => {
+    const state = new OfficeState();
+    state.applyEvent(ev({ type: "session_start", sessionId: "s1", ts: 1000, org: "org-a" }));
+    state.applyEvent(ev({ type: "pre_tool", sessionId: "s1", toolName: "Edit", ts: 1100, org: "org-b" }));
+
+    const session = state.getSnapshot().sessions.find((s) => s.sessionId === "s1");
+    expect(session?.org).toBe("org-b");
+  });
+
+  it("does not affect ordering-defense / tombstone behavior (regression guard)", () => {
+    const state = new OfficeState();
+    state.applyEvent(ev({ type: "session_start", sessionId: "s1", ts: 1000, org: "org-a" }));
+    state.applyEvent(ev({ type: "session_end", sessionId: "s1", ts: 2000 }));
+    state.applyEvent(ev({ type: "pre_tool", sessionId: "s1", toolName: "Edit", ts: 1500, org: "org-b" }));
+
+    expect(state.getSnapshot().sessions.find((s) => s.sessionId === "s1")).toBeUndefined();
+  });
+});
+
 describe("OfficeState.subscribe", () => {
   it("notifies subscribers when applyEvent changes state", () => {
     const state = new OfficeState();

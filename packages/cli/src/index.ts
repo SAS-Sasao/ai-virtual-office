@@ -118,7 +118,7 @@ function targetPathFor(paths: ResolvedPaths, project: boolean): string {
   return project ? paths.projectSettingsPath : paths.userSettingsPath;
 }
 
-function formatDoctorReport(report: DoctorReport): string {
+export function formatDoctorReport(report: DoctorReport): string {
   const lines: string[] = [];
   for (const h of report.hooks) {
     if (!h.exists) {
@@ -135,6 +135,11 @@ function formatDoctorReport(report: DoctorReport): string {
     if (h.duplicateSlugs.length > 0) {
       lines.push(
         `    warning: unmarked hook(s) already targeting the same URL for: ${h.duplicateSlugs.join(", ")} (possible duplicate delivery; consider running setup once the hand-written entry is removed, so it gets the #ai-office:cli marker)`,
+      );
+    }
+    if (h.malformedSlugs.length > 0) {
+      lines.push(
+        `    warning: malformed/unrecognized hook config (left untouched, not counted as installed) for: ${h.malformedSlugs.join(", ")} (fix the shape manually, then re-run setup)`,
       );
     }
   }

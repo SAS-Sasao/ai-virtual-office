@@ -199,6 +199,83 @@ describe("POST /hooks/:event wired with a RetryBuffer (as cli.ts does)", () => {
   });
 });
 
+describe("POST /hooks/:event の帰属付与（attribute DI）", () => {
+  it("attribute を注入すると、forward されたイベントに org/dept/role が付与される", async () => {
+    const attribute = () => ({ org: "domain-tech-collection", dept: "dept-engineering", role: "pipeline-dev" });
+    const { app, forwarded } = makeServer({ attribute });
+
+    const res = await app.request(postJson("/hooks/pre-tool", HOOK_BODY_FOR["pre-tool"]));
+
+    expect(res.status).toBe(200);
+    expect(forwarded).toHaveLength(1);
+    expect(forwarded[0]).toMatchObject({
+      org: "domain-tech-collection",
+      dept: "dept-engineering",
+      role: "pipeline-dev",
+    });
+  });
+
+  it("attribute 未指定（既定 no-op）のときは従来どおり org/dept/role を含まない", async () => {
+    const { app, forwarded } = makeServer();
+
+    await app.request(postJson("/hooks/pre-tool", HOOK_BODY_FOR["pre-tool"]));
+
+    expect(forwarded).toHaveLength(1);
+    expect(forwarded[0]).not.toHaveProperty("org");
+    expect(forwarded[0]).not.toHaveProperty("dept");
+    expect(forwarded[0]).not.toHaveProperty("role");
+  });
+
+  it("attribute が部分的な結果（org のみ）を返した場合は org だけが付与される", async () => {
+    const attribute = () => ({ org: "domain-tech-collection" });
+    const { app, forwarded } = makeServer({ attribute });
+
+    await app.request(postJson("/hooks/pre-tool", HOOK_BODY_FOR["pre-tool"]));
+
+    expect(forwarded[0]).toMatchObject({ org: "domain-tech-collection" });
+    expect(forwarded[0]).not.toHaveProperty("dept");
+    expect(forwarded[0]).not.toHaveProperty("role");
+  });
+
+  it("attribute が空オブジェクトを返した場合は org/dept/role を含めない", async () => {
+    const attribute = () => ({});
+    const { app, forwarded } = makeServer({ attribute });
+
+    await app.request(postJson("/hooks/pre-tool", HOOK_BODY_FOR["pre-tool"]));
+
+    expect(Object.keys(forwarded[0]).sort()).toEqual(["seq", "sessionId", "ts", "type"]);
+  });
+
+  it("attribute が throw しても 200 を返し、org/dept/role 無しで forward される（graceful degradation）", async () => {
+    const attribute = () => {
+      throw new Error("boom");
+    };
+    const { app, forwarded } = makeServer({ attribute });
+
+    const res = await app.request(postJson("/hooks/pre-tool", HOOK_BODY_FOR["pre-tool"]));
+
+    expect(res.status).toBe(200);
+    expect(forwarded).toHaveLength(1);
+    expect(forwarded[0]).not.toHaveProperty("org");
+  });
+
+  it("attribute は正規化前の raw body を受け取る（normalize で捨てられる cwd を参照できる）", async () => {
+    const seenRaw: unknown[] = [];
+    const attribute = (raw: unknown) => {
+      seenRaw.push(raw);
+      return {};
+    };
+    const { app } = makeServer({ attribute });
+
+    await app.request(
+      postJson("/hooks/pre-tool", { ...HOOK_BODY_FOR["pre-tool"], cwd: "/home/user/some-repo" }),
+    );
+
+    expect(seenRaw).toHaveLength(1);
+    expect(seenRaw[0]).toMatchObject({ cwd: "/home/user/some-repo" });
+  });
+});
+
 describe("GET /health", () => {
   it("pid / testMode / version / port / receivedCount / lastEventAt を返す", async () => {
     const { app } = makeServer({ testMode: true, version: "1.2.3", getPort: () => 4100 });

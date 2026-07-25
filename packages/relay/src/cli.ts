@@ -4,6 +4,7 @@ import { createServer } from "./server.js";
 import { createForwarder } from "./forward.js";
 import { createPersistentSeqCounter, resolveSeqPath } from "./seq.js";
 import { createRetryBuffer } from "./buffer.js";
+import { loadAttributor, resolveAttributionPath } from "./attribute.js";
 
 const DEFAULT_PORT = 4100;
 const DEFAULT_FORWARD_URL = "http://localhost:3001/api/ingest";
@@ -11,10 +12,11 @@ const DEFAULT_FORWARD_URL = "http://localhost:3001/api/ingest";
 interface CliArgs {
   port?: number;
   forward?: string;
+  attribution?: string;
 }
 
 /**
- * `ai-office-relay [--port N] [--forward URL]` の最小パーサ。
+ * `ai-office-relay [--port N] [--forward URL] [--attribution PATH]` の最小パーサ。
  * 未知の引数は無視する（hooks 経路と無関係な将来のフラグ追加に備え、厳密な
  * バリデーションで CLI 自体が落ちることを避ける）。
  */
@@ -32,6 +34,12 @@ function parseArgs(argv: string[]): CliArgs {
       const value = argv[i + 1];
       if (value !== undefined) {
         result.forward = value;
+        i += 1;
+      }
+    } else if (arg === "--attribution") {
+      const value = argv[i + 1];
+      if (value !== undefined) {
+        result.attribution = value;
         i += 1;
       }
     }
@@ -63,11 +71,18 @@ const buffer = createRetryBuffer({
 // 読み書きに失敗した場合は seq を採番しない（undefined。消費側は ts 昇順にフォールバック）。
 const nextSeq = createPersistentSeqCounter({ path: resolveSeqPath() });
 
+// FR-4: attribution.json（cc-sier-adapter が生成）を読み、org/dept/role の帰属推定を
+// 有効化する。ファイルが無い・壊れている場合も loadAttributor が graceful degradation
+// してくれるため、M0 からの利用者（attribution.json 未生成）を壊さずに常に正常起動する。
+const attributionPath = args.attribution ?? resolveAttributionPath();
+const attribute = loadAttributor({ path: attributionPath });
+
 const app = createServer({
   forward: buffer.send,
   nextSeq,
   testMode,
   getPort: () => actualPort,
+  attribute,
 });
 
 const server = serve(

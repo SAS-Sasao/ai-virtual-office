@@ -52,6 +52,19 @@ function deepClone<T>(value: T): T {
 }
 
 /**
+ * コマンドが実際に対象 URL へ curl で POST しているとみなせるかを判定する。
+ *
+ * 単純な `command.includes(url)` だけでは、`echo "see http://localhost:4100/hooks/stop"`
+ * のように URL を**言及しているだけ**（POST しない）コマンドまで「配線済み」と
+ * 誤認してしまう（M1-3 繰り越し#6）。URL 一致に加えて、実際に POST している
+ * ことを示す弱いシグナル（`curl` と `-X POST` の両方を含む）を要求することで、
+ * ログ出力・コメント等の言及のみのコマンドを除外する。
+ */
+function targetsUrlViaPost(command: string, url: string): boolean {
+  return command.includes(url) && command.includes("curl") && command.includes("-X POST");
+}
+
+/**
  * 既存の Claude Code hooks 設定に、CLI 管理下の観測 hooks（HOOKS_SPEC）を
  * 追記する純粋関数。既存の内容は一切壊さず、必要な分だけ追加する。
  *
@@ -59,9 +72,11 @@ function deepClone<T>(value: T): T {
  * 1. イベント直下の値、またはマッチする既存グループの `hooks` が配列でない
  *    （壊れた/未知形状の）場合、そのイベントには一切触れず追記もしない
  *    （Phase3 レビュー finding1: 無警告で既存値を空配列に上書きしていたバグの修正）。
- * 2. 同一 slug への同一 URL を叩く既存 hook が見つかり、それが完全体マーカー
- *    （#ai-office:cli）を持たない場合、二重送信を避けるため追加しない
- *    （手書きの `#ai-office` も対象。Phase3 finding3）。
+ * 2. 同一 slug への同一 URL を実際に curl で POST している既存 hook が見つかり
+ *    （URL を含むだけでは不十分。`curl` と `-X POST` を含むことも要求する。単に
+ *    URL を言及するだけの echo 等を誤検知しないため。M1-3 繰り越し#6）、それが
+ *    完全体マーカー（#ai-office:cli）を持たない場合、二重送信を避けるため
+ *    追加しない（手書きの `#ai-office` も対象。Phase3 finding3）。
  * 3. 対象 event + matcher（undefined は undefined として区別）の「中身が入って
  *    いる」既存グループに、CLI 自身の #ai-office:cli マーカー付きで同一 URL の
  *    エントリが既にあれば追加しない（冪等）。
@@ -101,7 +116,7 @@ export function mergeHooks(existing: unknown, spec: readonly HookSpecEntry[], po
       (g) =>
         Array.isArray(g.hooks) &&
         (g.hooks as RawHookEntry[]).some(
-          (h) => typeof h?.command === "string" && h.command.includes(url) && !h.command.includes(MARKER),
+          (h) => typeof h?.command === "string" && targetsUrlViaPost(h.command, url) && !h.command.includes(MARKER),
         ),
     );
     if (hasUnmarkedDuplicate) {
@@ -118,19 +133,28 @@ export function mergeHooks(existing: unknown, spec: readonly HookSpecEntry[], po
       continue;
     }
 
+    // 冪等判定（finding: same-matcher 複数非空グループ）は「最初に見つかった
+    // 非空グループ」だけを見てはいけない。同一 matcher の非空グループが複数
+    // 存在し得る（元は finding9 対応で CLI 自身のグループを既存の空グループとは
+    // 別に新規作成するため、後からユーザーがどちらかに手書き追記すると複数の
+    // 非空グループが並存し得る）。マーカー付き自分のエントリが「どのグループに
+    // あるか」に依らず検出できるよう、一致する全グループを横断して判定する。
+    const alreadyOurs = matchingGroups.some(
+      (g) =>
+        Array.isArray(g.hooks) &&
+        (g.hooks as RawHookEntry[]).some(
+          (h) => typeof h?.command === "string" && h.command.includes(MARKER) && h.command.includes(url),
+        ),
+    );
+    if (alreadyOurs) {
+      skippedIdempotentSlugs.push(entry.slug);
+      continue;
+    }
+
     const targetGroup = matchingGroups.find((g) => Array.isArray(g.hooks) && g.hooks.length > 0);
 
     if (targetGroup) {
       const hooksArr = targetGroup.hooks as RawHookEntry[];
-
-      const alreadyOurs = hooksArr.some(
-        (h) => typeof h?.command === "string" && h.command.includes(MARKER) && h.command.includes(url),
-      );
-      if (alreadyOurs) {
-        skippedIdempotentSlugs.push(entry.slug);
-        continue;
-      }
-
       hooksArr.push({ type: "command", command: buildCommand(entry.slug, port) });
       addedSlugs.push(entry.slug);
     } else {

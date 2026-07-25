@@ -11,6 +11,15 @@ export interface SessionCharacter {
    * 場合は undefined になる（順序防御の watermark。OrderKey 参照）。
    */
   lastSeq?: number;
+  /**
+   * 帰属推定（relay の attributor が付与、FR-4）。M1-3 で追加。イベントに
+   * 帰属が付いていない場合でも消さない（toolName と同じパススルー方針）。
+   * セッション途中で帰属が消えないよう、後着イベントに帰属が無ければ既存の
+   * 値を保持する（新しい値が来た場合のみ上書き）。
+   */
+  org?: string;
+  dept?: string;
+  role?: string;
 }
 
 export interface OfficeSnapshot {
@@ -37,6 +46,24 @@ function compareOrder(a: OrderKey, b: OrderKey): number {
     return a.seq - b.seq;
   }
   return a.ts - b.ts;
+}
+
+/**
+ * イベントに実際に含まれる帰属フィールドのみを抜き出す（キー自体を省略する
+ * ことで、upsert 側のデフォルト値＝既存の帰属を上書きしないようにする）。
+ */
+function attributionPatch(ev: OfficeEvent): Pick<SessionCharacter, "org" | "dept" | "role"> {
+  const patch: Pick<SessionCharacter, "org" | "dept" | "role"> = {};
+  if (ev.org !== undefined) {
+    patch.org = ev.org;
+  }
+  if (ev.dept !== undefined) {
+    patch.dept = ev.dept;
+  }
+  if (ev.role !== undefined) {
+    patch.role = ev.role;
+  }
+  return patch;
 }
 
 /**
@@ -83,7 +110,7 @@ export class OfficeState {
         return;
       }
       case "session_start": {
-        this.upsert(ev.sessionId, { state: "idle", lastTs: ev.ts, lastSeq: ev.seq });
+        this.upsert(ev.sessionId, { state: "idle", lastTs: ev.ts, lastSeq: ev.seq, ...attributionPatch(ev) });
         break;
       }
       case "pre_tool": {
@@ -92,24 +119,25 @@ export class OfficeState {
           toolName: ev.toolName,
           lastTs: ev.ts,
           lastSeq: ev.seq,
+          ...attributionPatch(ev),
         });
         break;
       }
       case "post_tool": {
-        this.upsert(ev.sessionId, { state: "thinking", lastTs: ev.ts, lastSeq: ev.seq });
+        this.upsert(ev.sessionId, { state: "thinking", lastTs: ev.ts, lastSeq: ev.seq, ...attributionPatch(ev) });
         break;
       }
       case "user_prompt": {
-        this.upsert(ev.sessionId, { state: "thinking", lastTs: ev.ts, lastSeq: ev.seq });
+        this.upsert(ev.sessionId, { state: "thinking", lastTs: ev.ts, lastSeq: ev.seq, ...attributionPatch(ev) });
         break;
       }
       case "notification": {
-        this.upsert(ev.sessionId, { state: "waiting", lastTs: ev.ts, lastSeq: ev.seq });
+        this.upsert(ev.sessionId, { state: "waiting", lastTs: ev.ts, lastSeq: ev.seq, ...attributionPatch(ev) });
         break;
       }
       case "stop":
       case "subagent_stop": {
-        this.upsert(ev.sessionId, { state: "done", lastTs: ev.ts, lastSeq: ev.seq });
+        this.upsert(ev.sessionId, { state: "done", lastTs: ev.ts, lastSeq: ev.seq, ...attributionPatch(ev) });
         break;
       }
       default: {
@@ -159,12 +187,23 @@ export class OfficeState {
 
   private upsert(
     sessionId: string,
-    patch: { state: CharacterState; toolName?: string; lastTs: number; lastSeq?: number },
+    patch: {
+      state: CharacterState;
+      toolName?: string;
+      lastTs: number;
+      lastSeq?: number;
+      org?: string;
+      dept?: string;
+      role?: string;
+    },
   ): void {
     const existing = this.sessions.get(sessionId);
     this.sessions.set(sessionId, {
       sessionId,
       toolName: existing?.toolName,
+      org: existing?.org,
+      dept: existing?.dept,
+      role: existing?.role,
       ...patch,
     });
   }

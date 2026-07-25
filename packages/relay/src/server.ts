@@ -3,6 +3,7 @@ import { OfficeEventSchema, type OfficeEvent } from "@ai-office/protocol";
 import { normalizeHookEvent } from "./normalize.js";
 import { createSeqCounter } from "./seq.js";
 import { createStatsCounter, type StatsCounter } from "./stats.js";
+import type { Attributor } from "./attribute.js";
 
 /**
  * 正規化済み OfficeEvent を下流（web の /api/ingest、または再送バッファ）へ
@@ -54,6 +55,13 @@ export interface CreateServerOptions {
    * GET /health の閲覧や POST /test/inject の受理では記録しない。
    */
   stats?: StatsCounter;
+  /**
+   * 正規化直後の raw hooks JSON から org/dept/role を推定する関数（DI、FR-4）。
+   * 既定は no-op（常に `{}` を返す。既存の呼び出し元・テストの挙動を変えない）。
+   * cwd は normalize 後の OfficeEvent には残っていないため、attributor には
+   * `normalizeHookEvent` に渡したのと同じ raw body を渡す。
+   */
+  attribute?: Attributor;
 }
 
 /**
@@ -69,6 +77,7 @@ export function createServer(options: CreateServerOptions): Hono {
     version = "0.0.0",
     getPort = () => 0,
     stats = createStatsCounter(),
+    attribute = () => ({}),
   } = options;
 
   const app = new Hono();
@@ -101,7 +110,20 @@ export function createServer(options: CreateServerOptions): Hono {
     // POST /test/inject 経由の受理はここを通らないため含まれない（意図どおり）。
     stats.record(ts);
 
-    const event: OfficeEvent = { ...normalized, seq: nextSeq() };
+    // FR-4: raw（normalize で cwd 等が捨てられる前の body）から org/dept/role を
+    // 推定して付与する。attribute 自体は例外を投げない契約（createAttributor 参照）
+    // だが、DI で差し替えられた実装が万一 throw しても hooks は絶対にブロックしない
+    // （NFR-2 と同じ保険の二重握り潰し）。
+    let attribution: ReturnType<Attributor> = {};
+    try {
+      attribution = attribute(raw);
+    } catch (err) {
+      // NFR-4: err オブジェクトを出力しない（DI された attributor が cwd 入りの例外を
+      // 投げた場合でも、パスがログへ漏れる経路を作らない。固定文字列のみ）
+      console.warn("relay: attribute threw unexpectedly (ignored, hooks must never block)");
+    }
+
+    const event: OfficeEvent = { ...normalized, ...attribution, seq: nextSeq() };
 
     try {
       await forward(event);
