@@ -1,3 +1,3 @@
 - [masters format variance](masters_format_variance.md) — roles.md のキー名ゆらぎ（部署/所属部署、モデル/model）と subagent_type の組織間衝突（secretary 等）
-- [adapter layout algorithm](adapter_layout_algorithm.md) — レイアウト自動生成の具体定数（設計メモ非規定・実装判断）とキャラID命名（`org:role`）
-- [typecheck hook and TDD](typecheck_hook_and_tdd.md) — typecheck-touched hook が非テストファイルの red-first を難しくするケースと `*/` コメント閉じ忘れの罠
+- [adapter layout algorithm](adapter_layout_algorithm.md) — レイアウト具体定数・M1-4a 連結性保証（廊下レーン/door/BFS 不変条件）・3組織実測・fixtures 拡充
+- [typecheck hook and TDD](typecheck_hook_and_tdd.md) — typecheck-touched hook はパッケージ単位発火（無関係ファイル編集でも既存エラーで鳴る、Write自体は反映される）と `*/` コメント閉じ忘れの罠

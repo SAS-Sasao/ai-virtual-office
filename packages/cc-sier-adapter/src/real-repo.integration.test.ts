@@ -14,8 +14,10 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import type { Floor } from "@ai-office/protocol";
 import { defaultFsDeps } from "./fs-io.js";
 import { runImport, type CliDeps } from "./cli.js";
+import { checkFloorConnectivity } from "./import-org.js";
 
 const REAL_REPO = "/home/toyoki05/cc-sier-organization";
 const hasRealRepo = existsSync(join(REAL_REPO, ".companies"));
@@ -87,6 +89,25 @@ function makeDeps(): CliDeps & { logs: string[]; errors: string[] } {
       "jutaku-dev-team",
       "standardization-initiative",
     ]);
+
+    // M1-4a rev.2 F1（AC-3b②の実リポジトリ版）: 実 3 組織すべてで、入口（フロア最下段
+    // 中央）から全 active 部屋の door を経て内部へ到達できる（生成時に adapter 自身が
+    // 保証している不変条件を、実リポジトリの生成物に対しても再確認する）。
+    for (const floor of layout.floors as Floor[]) {
+      const connectivity = checkFloorConnectivity(floor);
+      expect(connectivity, `org "${floor.org}" should have full connectivity`).toEqual({
+        ok: true,
+        unreachableRoomIds: [],
+      });
+    }
+
+    // 受付（dept-secretary）はもう全幅ではない（rev.2: 他部屋と同じロール数比例幅・
+    // 最下段中央寄せ）。
+    for (const floor of layout.floors as Floor[]) {
+      const reception = floor.rooms.find((r: { id: string }) => r.id === "dept-secretary");
+      expect(reception).toBeDefined();
+      expect(reception!.w).toBeLessThan(floor.grid.cols);
+    }
   });
 
   it("is idempotent against the real repo: re-running produces byte-identical output", () => {

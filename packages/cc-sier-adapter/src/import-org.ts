@@ -5,6 +5,14 @@
 // 常に同じバイト列が得られる（AC-3）。レイアウト自動生成のアルゴリズムはこのファイル内の
 // 定数（GRID_COLS 等）に閉じ込め、値そのものは設計メモが明示していないため実装判断として
 // ここで固定する（グリッド幅 30 タイル・行優先・部屋幅はロール数比例、という制約は遵守）。
+//
+// 連結性の保証（M1-4a rev.2・F1 の根本対応）: 部屋は「フロア外周 1 タイル + 行間 1 タイル」
+// の廊下レーンの内側にのみ配置し、受付（dept-secretary）も他部屋と同じロール数比例幅に
+// して最下段中央へ寄せる（全幅にしない）。各部屋の door（下辺のうち廊下に面するタイル・
+// 中央優先）を計算し、生成直後に自己 BFS で「入口（フロア最下段中央）→ 全 active 部屋の
+// door を経て内部」の到達可能性を検証する。違反時は該当組織の生成を ok:false として扱う
+// （既存出力を上書きしない・warnings に理由を積む。RoomSchema.door の doc comment の契約と
+// 対になる、adapter 側の実装義務）。
 import {
   CharacterSchema,
   FloorSchema,
@@ -19,7 +27,10 @@ import { compareCodePoint } from "./sort-util.js";
 
 /** フロアのグリッド幅（タイル）。要件どおり固定値。 */
 export const GRID_COLS = 30;
+/** フロア外周・部屋の行間に確保する廊下レーンの幅（タイル）。 */
+const CORRIDOR_MARGIN = 1;
 const ROOM_HEIGHT = 6;
+/** 同一行内で隣り合う部屋どうしの間隔（廊下扱い）。 */
 const ROOM_GAP = 1;
 const ROOM_MIN_WIDTH = 5;
 const WIDTH_PER_ROLE = 3;
@@ -43,15 +54,157 @@ function roomWidthFor(roleCount: number): number {
   return Math.max(ROOM_MIN_WIDTH, WIDTH_PER_ROLE * roleCount + 2);
 }
 
+/** door を除いた部屋の幾何情報。door は全部屋の配置が確定した後の 2 パス目で計算する。 */
+type RoomGeometry = Omit<Room, "door">;
+
+/** (x, y) がどの部屋にも属さない（＝廊下タイルである）かどうかを判定する。 */
+function isCorridorTile(x: number, y: number, rooms: readonly RoomGeometry[]): boolean {
+  return !rooms.some((r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
+}
+
+/**
+ * 部屋の下辺（境界タイル）のうち、直下が廊下タイルであるものを door として返す
+ * （中央優先・「廊下レーンの確保」規則により通常は中央がそのまま採用される。中央が
+ * 塞がっている場合のみ左右に探索を広げる防御的フォールバック）。
+ */
+function computeDoor(room: RoomGeometry, allRooms: readonly RoomGeometry[]): Room["door"] {
+  const doorY = room.y + room.h - 1;
+  const belowY = doorY + 1;
+  const center = room.x + Math.floor((room.w - 1) / 2);
+
+  for (let offset = 0; offset < room.w; offset += 1) {
+    const candidateXs = offset === 0 ? [center] : [center - offset, center + offset];
+    for (const x of candidateXs) {
+      if (x < room.x || x >= room.x + room.w) continue;
+      if (isCorridorTile(x, belowY, allRooms)) {
+        return { x, y: doorY };
+      }
+    }
+  }
+
+  // フォールバック: 廊下レーンの確保規則（外周・行間 1 タイル）を守っている限り
+  // 到達しない。万一到達しても door フィールドは必須のため中央を返し、後段の
+  // checkFloorConnectivity がこの org の生成をエラーとして検出する。
+  return { x: center, y: doorY };
+}
+
+export interface ConnectivityCheckResult {
+  ok: boolean;
+  /** 入口から door 経由で到達できなかった active 部屋の id（到達できていれば空配列）。 */
+  unreachableRoomIds: string[];
+}
+
+const NEIGHBOR_DELTAS: ReadonlyArray<readonly [number, number]> = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+];
+
+function tileKey(x: number, y: number): string {
+  return `${x},${y}`;
+}
+
+function findRoomAt(floor: Floor, x: number, y: number): Room | undefined {
+  return floor.rooms.find((r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
+}
+
+function isWalkableTile(floor: Floor, x: number, y: number): boolean {
+  if (x < 0 || x >= floor.grid.cols || y < 0 || y >= floor.grid.rows) return false;
+  const room = findRoomAt(floor, x, y);
+  if (!room) return true; // 部屋に属さないタイルは廊下（歩行可）
+  const isDoor = room.door.x === x && room.door.y === y;
+  const isInterior = x > room.x && x < room.x + room.w - 1 && y > room.y && y < room.y + room.h - 1;
+  return isDoor || isInterior;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+/**
+ * 部屋の中心寄りの内部代表タイル。`checkFloorConnectivity` が「door だけでなく
+ * 内部そのものに到達できるか」まで検証するために使う（M1-4a Phase 3 レビュー指摘 2
+ * への対応）。内部タイルを持てない小さい部屋（w か h が 3 未満）は door 自体へ
+ * フォールバックする（契約上 door は必ず歩行可能なため、この場合は door 到達を以て
+ * 内部到達とみなす）。
+ *
+ * apps/web/game/layout-runtime.ts の `roomInteriorAnchor` と同じ考え方（中心タイル・
+ * 同じフォールバック規則）を、パッケージ間の非依存方針を保ったまま独立に実装している
+ * （game は cc-sier-adapter に依存せず、逆方向の依存も作らない）。
+ */
+function interiorAnchor(room: Room): { x: number; y: number } {
+  if (room.w < 3 || room.h < 3) {
+    return { x: room.door.x, y: room.door.y };
+  }
+  const cx = clamp(room.x + Math.floor(room.w / 2), room.x + 1, room.x + room.w - 2);
+  const cy = clamp(room.y + Math.floor(room.h / 2), room.y + 1, room.y + room.h - 2);
+  return { x: cx, y: cy };
+}
+
+/**
+ * 生成した Floor の連結性不変条件を検証する（M1-4a rev.2 F1 の根本対応）。
+ *
+ * 入口（フロア最下段中央のタイル）から 4 近傍 BFS を行い、各 active 部屋について
+ * **door タイルと内部代表タイル（interiorAnchor）の両方**に到達できるかを確認する。
+ * 通常、door は部屋の境界上にあり door から 1 タイル内側は常に部屋の内部
+ * （interior）に接するため、door に到達できれば内部にも到達できる（interior は矩形で
+ * 自明に全域連結）。**ただし door が部屋の「角」に来た場合は例外**で、角タイルは
+ * 4 近傍のどの方向にも内部へ踏み込めず、door 自体は visited でも内部は完全に閉じた
+ * ままになりうる（Phase 3 レビュー指摘 2・low）。door 到達だけでは見逃すこの穴を、
+ * 内部代表タイルの到達も併せて要求することで塞ぐ。standby 部屋は要件どおり判定対象外
+ * （閉鎖ドアの演出は描画側の責務であり、生成時の連結性契約には含めない）。
+ */
+export function checkFloorConnectivity(floor: Floor): ConnectivityCheckResult {
+  const entrance = { x: Math.floor(floor.grid.cols / 2), y: floor.grid.rows - 1 };
+
+  const visited = new Set<string>();
+  const queue: Array<{ x: number; y: number }> = [];
+
+  if (isWalkableTile(floor, entrance.x, entrance.y)) {
+    visited.add(tileKey(entrance.x, entrance.y));
+    queue.push(entrance);
+  }
+
+  let head = 0;
+  while (head < queue.length) {
+    const current = queue[head];
+    head += 1;
+    for (const [dx, dy] of NEIGHBOR_DELTAS) {
+      const nx = current.x + dx;
+      const ny = current.y + dy;
+      const key = tileKey(nx, ny);
+      if (visited.has(key)) continue;
+      if (!isWalkableTile(floor, nx, ny)) continue;
+      visited.add(key);
+      queue.push({ x: nx, y: ny });
+    }
+  }
+
+  const unreachableRoomIds = floor.rooms
+    .filter((r) => r.status === "active")
+    .filter((r) => {
+      const anchor = interiorAnchor(r);
+      return !visited.has(tileKey(r.door.x, r.door.y)) || !visited.has(tileKey(anchor.x, anchor.y));
+    })
+    .map((r) => r.id);
+
+  return { ok: unreachableRoomIds.length === 0, unreachableRoomIds };
+}
+
 /**
  * 1 組織分の masters 文字列から Floor + Character[] を生成する。
  *
  * - departments.md が無い、または有効な部署が 0 件の場合は ok:false を返す
  *   （import-org.ts レベルでは「その組織を除外」の判断のみ行い、CLI 全体としての
  *   graceful degradation 判定は cli.ts が全組織の結果を見て行う）
- * - 部署はマスタの出現順（行優先）でグリッド幅 GRID_COLS 内に配置する。部屋幅は
- *   所属ロール数に比例させる。dept-secretary は受付として最下段に固定配置する
+ * - 部署はマスタの出現順（行優先）で、フロア外周・行間に 1 タイルの廊下レーンを
+ *   確保しながら配置する。部屋幅は所属ロール数に比例させる。dept-secretary は
+ *   受付として最下段中央に、他部屋と同じ比例幅で配置する（全幅にはしない）
  * - standby 部署も部屋として配置する（描画側が消灯表現に使う。要件 §2.1）
+ * - 各部屋の door（下辺のうち廊下に面するタイル）を計算し、生成直後に
+ *   checkFloorConnectivity で「入口 → 全 active 部屋」の到達可能性を検証する。
+ *   違反時は ok:false を返す（この org を除外し、既存出力を上書きしない）
  */
 export function buildOrgFloor(input: OrgMastersInput): BuildOrgFloorOutcome {
   const warnings: string[] = [];
@@ -83,20 +236,20 @@ export function buildOrgFloor(input: OrgMastersInput): BuildOrgFloorOutcome {
   const reception = deptResult.departments.find((d) => d.id === RECEPTION_ID);
   const others = deptResult.departments.filter((d) => d.id !== RECEPTION_ID);
 
-  const rooms: Room[] = [];
-  let cursorX = 0;
-  let cursorY = 0;
+  const roomsGeometry: RoomGeometry[] = [];
+  let cursorX = CORRIDOR_MARGIN;
+  let cursorY = CORRIDOR_MARGIN;
   let rowUsed = false;
 
   for (const dept of others) {
     const roleCount = roleCountByDept.get(dept.id) ?? 0;
     const width = roomWidthFor(roleCount);
-    if (rowUsed && cursorX + width > GRID_COLS) {
-      cursorX = 0;
+    if (rowUsed && cursorX + width > GRID_COLS - CORRIDOR_MARGIN) {
+      cursorX = CORRIDOR_MARGIN;
       cursorY += ROOM_HEIGHT + ROOM_GAP;
       rowUsed = false;
     }
-    rooms.push({
+    roomsGeometry.push({
       id: dept.id,
       name: dept.name,
       status: dept.status,
@@ -111,20 +264,29 @@ export function buildOrgFloor(input: OrgMastersInput): BuildOrgFloorOutcome {
   }
 
   if (reception) {
-    const receptionY = rowUsed ? cursorY + ROOM_HEIGHT + ROOM_GAP : 0;
-    rooms.push({
+    const receptionRoleCount = roleCountByDept.get(reception.id) ?? 0;
+    const receptionWidth = roomWidthFor(receptionRoleCount);
+    const receptionY = rowUsed ? cursorY + ROOM_HEIGHT + ROOM_GAP : cursorY;
+    const availableWidth = GRID_COLS - 2 * CORRIDOR_MARGIN;
+    const receptionX = CORRIDOR_MARGIN + Math.max(0, Math.floor((availableWidth - receptionWidth) / 2));
+    roomsGeometry.push({
       id: reception.id,
       name: reception.name,
       status: reception.status,
-      x: 0,
+      x: receptionX,
       y: receptionY,
-      w: GRID_COLS,
+      w: receptionWidth,
       h: RECEPTION_HEIGHT,
       triggers: reception.triggers,
     });
   } else {
     warnings.push(`${orgTag}: no "${RECEPTION_ID}" department found (reception room omitted)`);
   }
+
+  const rooms: Room[] = roomsGeometry.map((geometry) => ({
+    ...geometry,
+    door: computeDoor(geometry, roomsGeometry),
+  }));
 
   const roomsById = new Map(rooms.map((r) => [r.id, r]));
   const furniture: Furniture[] = [];
@@ -159,10 +321,18 @@ export function buildOrgFloor(input: OrgMastersInput): BuildOrgFloorOutcome {
   const floor = FloorSchema.parse({
     org: input.orgId,
     label,
-    grid: { cols: GRID_COLS, rows: maxBottom + ROOM_GAP, tileSize: DEFAULT_TILE_SIZE },
+    grid: { cols: GRID_COLS, rows: maxBottom + CORRIDOR_MARGIN, tileSize: DEFAULT_TILE_SIZE },
     rooms,
     furniture,
   });
+
+  const connectivity = checkFloorConnectivity(floor);
+  if (!connectivity.ok) {
+    warnings.push(
+      `${orgTag}: generated layout failed the connectivity invariant — room(s) [${connectivity.unreachableRoomIds.join(", ")}] are not reachable from the entrance via their door; aborting generation for this org (existing output left untouched)`,
+    );
+    return { ok: false, warnings };
+  }
 
   return { ok: true, floor, characters, warnings };
 }

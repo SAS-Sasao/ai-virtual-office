@@ -3,14 +3,20 @@ import type { Floor, OfficeLayout } from "@ai-office/protocol";
 import {
   DEPARTMENTS_MD,
   DEPARTMENTS_MD_ALL_BROKEN,
+  DEPARTMENTS_MD_JUTAKU,
+  DEPARTMENTS_MD_STANDARDIZATION,
   DEPARTMENTS_MD_WITH_STANDBY,
   ORGANIZATION_MD,
+  ORGANIZATION_MD_STANDARDIZATION,
   ROLES_MD,
   ROLES_MD_ALT_KEYS,
+  ROLES_MD_JUTAKU,
+  ROLES_MD_STANDARDIZATION,
 } from "./fixtures/masters.js";
 import {
   GRID_COLS,
   buildOrgFloor,
+  checkFloorConnectivity,
   importOrganizations,
   mergeFloorWithCustom,
   type OrgMastersInput,
@@ -21,6 +27,19 @@ const domainTechInput: OrgMastersInput = {
   organizationMd: ORGANIZATION_MD,
   departmentsMd: DEPARTMENTS_MD,
   rolesMd: ROLES_MD,
+};
+
+const jutakuInput: OrgMastersInput = {
+  orgId: "jutaku-dev-team",
+  departmentsMd: DEPARTMENTS_MD_JUTAKU,
+  rolesMd: ROLES_MD_JUTAKU,
+};
+
+const standardizationInput: OrgMastersInput = {
+  orgId: "standardization-initiative",
+  organizationMd: ORGANIZATION_MD_STANDARDIZATION,
+  departmentsMd: DEPARTMENTS_MD_STANDARDIZATION,
+  rolesMd: ROLES_MD_STANDARDIZATION,
 };
 
 describe("buildOrgFloor", () => {
@@ -42,13 +61,13 @@ describe("buildOrgFloor", () => {
     expect(GRID_COLS).toBe(30);
   });
 
-  it("gives every room non-overlapping, in-bounds tile coordinates", () => {
+  it("gives every room non-overlapping, in-bounds tile coordinates, reserved inside a 1-tile outer corridor margin", () => {
     const outcome = buildOrgFloor(domainTechInput);
     if (!outcome.ok) throw new Error("expected ok");
     for (const room of outcome.floor.rooms) {
-      expect(room.x).toBeGreaterThanOrEqual(0);
-      expect(room.x + room.w).toBeLessThanOrEqual(GRID_COLS);
-      expect(room.y).toBeGreaterThanOrEqual(0);
+      expect(room.x).toBeGreaterThanOrEqual(1); // 左 1 タイルは外周廊下
+      expect(room.x + room.w).toBeLessThanOrEqual(GRID_COLS - 1); // 右 1 タイルは外周廊下
+      expect(room.y).toBeGreaterThanOrEqual(1); // 上 1 タイルは外周廊下
     }
     // 矩形が重ならないこと（同じ行に並ぶ部屋同士の x レンジが重複しない）
     const byRow = new Map<number, typeof outcome.floor.rooms>();
@@ -65,12 +84,37 @@ describe("buildOrgFloor", () => {
     }
   });
 
-  it("places the reception (dept-secretary) room on the bottom-most row", () => {
+  it("computes a door on each room's bottom edge, positioned within the room's own width and facing a tile that no room occupies (a corridor tile)", () => {
+    const outcome = buildOrgFloor(domainTechInput);
+    if (!outcome.ok) throw new Error("expected ok");
+    for (const room of outcome.floor.rooms) {
+      expect(room.door.y).toBe(room.y + room.h - 1); // 下辺
+      expect(room.door.x).toBeGreaterThanOrEqual(room.x);
+      expect(room.door.x).toBeLessThan(room.x + room.w);
+
+      const belowY = room.door.y + 1;
+      const belowIsCorridor = !outcome.floor.rooms.some(
+        (other) => room.door.x >= other.x && room.door.x < other.x + other.w && belowY >= other.y && belowY < other.y + other.h,
+      );
+      expect(belowIsCorridor).toBe(true);
+    }
+  });
+
+  it("places the reception (dept-secretary) room on the bottom-most row, at a proportional (not full-floor) width", () => {
     const outcome = buildOrgFloor(domainTechInput);
     if (!outcome.ok) throw new Error("expected ok");
     const reception = outcome.floor.rooms.find((r) => r.id === "dept-secretary");
     const maxY = Math.max(...outcome.floor.rooms.map((r) => r.y));
     expect(reception?.y).toBe(maxY);
+    expect(reception?.w).toBeLessThan(GRID_COLS); // rev.2: 受付はもう全幅ではない
+    expect(reception?.x).toBeGreaterThan(0); // 全幅でないなら左端 0 に張り付かない
+  });
+
+  it("satisfies the connectivity invariant: the entrance (bottom-most row, centered) reaches every active room's interior via its door", () => {
+    const outcome = buildOrgFloor(domainTechInput);
+    if (!outcome.ok) throw new Error("expected ok");
+    const result = checkFloorConnectivity(outcome.floor);
+    expect(result).toEqual({ ok: true, unreachableRoomIds: [] });
   });
 
   it("places one desk furniture item per role, inside that role's department room bounds", () => {
@@ -95,7 +139,7 @@ describe("buildOrgFloor", () => {
     expect(secretary?.model).toBe("opus");
   });
 
-  it("also places a standby department as a room (status: standby, not omitted)", () => {
+  it("also places a standby department as a room (status: standby, not omitted), with a door of its own", () => {
     const outcome = buildOrgFloor({
       orgId: "domain-tech-collection",
       departmentsMd: DEPARTMENTS_MD_WITH_STANDBY,
@@ -105,6 +149,7 @@ describe("buildOrgFloor", () => {
     const standby = outcome.floor.rooms.find((r) => r.id === "dept-future-lab");
     expect(standby).toBeDefined();
     expect(standby?.status).toBe("standby");
+    expect(standby?.door).toEqual({ x: expect.any(Number), y: expect.any(Number) });
   });
 
   it("falls back the floor label to the org id when organization.md is absent", () => {
@@ -148,13 +193,98 @@ describe("buildOrgFloor", () => {
   });
 });
 
+describe("checkFloorConnectivity", () => {
+  it("passes (ok:true, no unreachable rooms) for a floor generated from the real domain-tech-collection masters", () => {
+    const outcome = buildOrgFloor(domainTechInput);
+    if (!outcome.ok) throw new Error("expected ok");
+    expect(checkFloorConnectivity(outcome.floor)).toEqual({ ok: true, unreachableRoomIds: [] });
+  });
+
+  it("reports an active room as unreachable when its door does not actually face a corridor tile (boxed in by a neighboring room)", () => {
+    // 手作りの壊れたフロア: dept-a の door(3,6) の直下 (3,7) を dept-b が覆っており、
+    // 廊下に面していない（連結性契約違反）。
+    const brokenFloor: Floor = {
+      org: "broken",
+      label: "broken",
+      grid: { cols: 10, rows: 10, tileSize: 32 },
+      rooms: [
+        { id: "dept-a", name: "A", status: "active", x: 1, y: 1, w: 5, h: 6, triggers: [], door: { x: 3, y: 6 } },
+        { id: "dept-b", name: "B", status: "active", x: 1, y: 7, w: 5, h: 2, triggers: [], door: { x: 3, y: 8 } },
+      ],
+      furniture: [],
+    };
+    const result = checkFloorConnectivity(brokenFloor);
+    expect(result.ok).toBe(false);
+    expect(result.unreachableRoomIds).toContain("dept-a");
+  });
+
+  it("reports an active room as unreachable when its door sits in a corner (door tile itself is reachable, but no orthogonal step leads into the room's interior)", () => {
+    // Phase 3 レビュー指摘 2（low）への対応: door 到達だけを見ていると、door が
+    // 部屋の「角」に来た場合（例: computeDoor の防御的フォールバックが角を返した場合）を
+    // 見逃す。角タイルは 4 近傍のどの方向にも「内部」へ踏み込めない
+    // （上下左右のいずれも境界壁か部屋の外）ため、door 自体は廊下から visited になって
+    // も部屋の内部は完全に閉じたままになりうる。
+    //
+    // dept-corner: x:[1,6) y:[1,6)（内部は x:[2,5) y:[2,5)）。door を左下角 (1,5) に
+    // 手動で置く（本来 computeDoor は中央優先で角を避けるが、契約違反の手作りデータで
+    // 「door 到達 = 内部到達」という誤った前提を検証する）。
+    const cornerDoorFloor: Floor = {
+      org: "corner-door",
+      label: "corner-door",
+      grid: { cols: 10, rows: 10, tileSize: 32 },
+      rooms: [
+        { id: "dept-corner", name: "Corner", status: "active", x: 1, y: 1, w: 5, h: 5, triggers: [], door: { x: 1, y: 5 } },
+      ],
+      furniture: [],
+    };
+
+    const result = checkFloorConnectivity(cornerDoorFloor);
+    expect(result.ok).toBe(false);
+    expect(result.unreachableRoomIds).toContain("dept-corner");
+  });
+
+  it("ignores standby rooms when deciding reachability (a standby room with an unreachable door does not fail the check)", () => {
+    const floor: Floor = {
+      org: "standby-only",
+      label: "standby-only",
+      grid: { cols: 10, rows: 10, tileSize: 32 },
+      rooms: [
+        {
+          id: "dept-standby",
+          name: "休止室",
+          status: "standby",
+          x: 1,
+          y: 1,
+          w: 5,
+          h: 2,
+          triggers: [],
+          door: { x: 3, y: 2 }, // 直下 (3,3) は grid 外周だが standby なので判定対象外
+        },
+      ],
+      furniture: [],
+    };
+    const result = checkFloorConnectivity(floor);
+    expect(result).toEqual({ ok: true, unreachableRoomIds: [] });
+  });
+});
+
 describe("mergeFloorWithCustom", () => {
   const baseFloor: Floor = {
     org: "domain-tech-collection",
     label: "test",
     grid: { cols: 30, rows: 10, tileSize: 32 },
     rooms: [
-      { id: "dept-research", name: "技術リサーチ室", status: "active", x: 0, y: 0, w: 8, h: 6, triggers: [] },
+      {
+        id: "dept-research",
+        name: "技術リサーチ室",
+        status: "active",
+        x: 0,
+        y: 0,
+        w: 8,
+        h: 6,
+        triggers: [],
+        door: { x: 4, y: 5 },
+      },
     ],
     furniture: [{ kind: "desk", x: 1, y: 1 }],
   };
@@ -179,6 +309,7 @@ describe("mergeFloorWithCustom", () => {
           w: 5,
           h: 5,
           triggers: [],
+          door: { x: 22, y: 4 },
           custom: true,
         },
       ],
@@ -224,7 +355,18 @@ describe("mergeFloorWithCustom", () => {
       ...baseFloor,
       rooms: [
         ...baseFloor.rooms,
-        { id: "meeting-room-1", name: "会議室", status: "active", x: 20, y: 0, w: 5, h: 5, triggers: [], custom: true },
+        {
+          id: "meeting-room-1",
+          name: "会議室",
+          status: "active",
+          x: 20,
+          y: 0,
+          w: 5,
+          h: 5,
+          triggers: [],
+          door: { x: 22, y: 4 },
+          custom: true,
+        },
       ],
     };
     const once = mergeFloorWithCustom(baseFloor, existing);
@@ -291,6 +433,7 @@ describe("importOrganizations", () => {
                   w: 6,
                   h: 4,
                   triggers: [],
+                  door: { x: 3, y: 23 },
                   custom: true,
                 },
               ],
@@ -331,6 +474,7 @@ describe("importOrganizations", () => {
                 w: 5,
                 h: 6,
                 triggers: [],
+                door: { x: 2, y: 5 },
               },
               {
                 id: "meeting-room-1",
@@ -341,6 +485,7 @@ describe("importOrganizations", () => {
                 w: 5,
                 h: 5,
                 triggers: [],
+                door: { x: 8, y: 4 },
                 custom: true,
               },
             ],
@@ -370,6 +515,7 @@ describe("importOrganizations", () => {
           w: 5,
           h: 5,
           triggers: [],
+          door: { x: 8, y: 4 },
           custom: true,
         },
       ]);
@@ -386,7 +532,17 @@ describe("importOrganizations", () => {
             label: "消えた組織",
             grid: { cols: 30, rows: 10, tileSize: 32 },
             rooms: [
-              { id: "dept-old", name: "旧生成部屋", status: "active", x: 0, y: 0, w: 5, h: 6, triggers: [] },
+              {
+                id: "dept-old",
+                name: "旧生成部屋",
+                status: "active",
+                x: 0,
+                y: 0,
+                w: 5,
+                h: 6,
+                triggers: [],
+                door: { x: 2, y: 5 },
+              },
             ],
             furniture: [{ kind: "desk", x: 1, y: 1 }],
           },
@@ -420,6 +576,7 @@ describe("importOrganizations", () => {
                 w: 5,
                 h: 5,
                 triggers: [],
+                door: { x: 2, y: 4 },
                 custom: true,
               },
             ],
@@ -460,6 +617,7 @@ describe("importOrganizations", () => {
                 w: 5,
                 h: 5,
                 triggers: [],
+                door: { x: 2, y: 4 },
                 custom: true,
               },
             ],
@@ -487,7 +645,18 @@ describe("importOrganizations", () => {
             label: "消えた組織",
             grid: { cols: 30, rows: 10, tileSize: 32 },
             rooms: [
-              { id: "r", name: "R", status: "active", x: 0, y: 0, w: 5, h: 5, triggers: [], custom: true },
+              {
+                id: "r",
+                name: "R",
+                status: "active",
+                x: 0,
+                y: 0,
+                w: 5,
+                h: 5,
+                triggers: [],
+                door: { x: 2, y: 4 },
+                custom: true,
+              },
             ],
             furniture: [],
           },
@@ -515,5 +684,43 @@ describe("importOrganizations", () => {
       undefined,
     );
     expect(result.layout.floors.map((f) => f.org)).toEqual([...ids].sort());
+  });
+
+  // M1-4a rev.2 F1: 3 実組織すべてで「入口 → 全 active 部屋」が到達可能であること
+  // （生成時不変条件 checkFloorConnectivity の adapter unit テスト、AC-3b①）。
+  describe("connectivity across the 3 real organizations (AC-3b)", () => {
+    const result = importOrganizations([domainTechInput, jutakuInput, standardizationInput], undefined);
+
+    it("produces one floor per organization", () => {
+      expect(result.layout.floors.map((f) => f.org).sort()).toEqual([
+        "domain-tech-collection",
+        "jutaku-dev-team",
+        "standardization-initiative",
+      ]);
+    });
+
+    it("keeps every floor within GRID_COLS (30 columns)", () => {
+      for (const floor of result.layout.floors) {
+        expect(floor.grid.cols).toBe(GRID_COLS);
+        for (const room of floor.rooms) {
+          expect(room.x + room.w).toBeLessThanOrEqual(GRID_COLS);
+        }
+      }
+    });
+
+    it("makes every active room reachable from the entrance via its door, on every floor", () => {
+      for (const floor of result.layout.floors) {
+        const connectivity = checkFloorConnectivity(floor);
+        expect(connectivity).toEqual({ ok: true, unreachableRoomIds: [] });
+      }
+    });
+
+    it("never places the reception (dept-secretary) room at full floor width", () => {
+      for (const floor of result.layout.floors) {
+        const reception = floor.rooms.find((r) => r.id === "dept-secretary");
+        expect(reception).toBeDefined();
+        expect(reception!.w).toBeLessThan(GRID_COLS);
+      }
+    });
   });
 });

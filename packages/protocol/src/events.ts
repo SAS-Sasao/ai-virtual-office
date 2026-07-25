@@ -7,8 +7,12 @@
 import { z } from "zod";
 
 /**
- * キャラクターの見た目上の状態。ツール名からの導出（mapping.toolToState）でのみ
- * 生成され、OfficeEvent には含まれない派生値。
+ * キャラクターの見た目上の状態。OfficeEvent には含まれない派生値。
+ *
+ * - `idle` 〜 `done`（8 種）: ツール名からの導出（mapping.toolToState）で生成される。
+ * - `walk` / `leave`（M1-4a 追加）: **移動由来**の状態であり、`mapping.toolToState`
+ *   は設定しない。`apps/web/game` の状態機械（scene.ts）だけが、入退室・自席への
+ *   往復などキャラクターの歩行遷移を表現するために設定する。
  */
 export const CharacterStateSchema = z.enum([
   "idle",
@@ -19,6 +23,8 @@ export const CharacterStateSchema = z.enum([
   "thinking",
   "waiting",
   "done",
+  "walk",
+  "leave",
 ]);
 
 export type CharacterState = z.infer<typeof CharacterStateSchema>;
