@@ -18,6 +18,13 @@ export interface DoctorHooksStatus {
   missingSlugs: string[];
   /** マーカー無しの同等 hook（重複送信の恐れ）を検出した slug（AC-11b 相当の警告）。 */
   duplicateSlugs: string[];
+  /**
+   * 既存値が期待される形（配列）でない壊れた/未知形状の設定を検出し、
+   * 診断対象外にした slug（`mergeHooks` の `skippedMalformedSlugs` をそのまま
+   * 反映する。M1-3 繰り越し#5: これを報告しないと `installedSlugs` /
+   * `duplicateSlugs` / `missingSlugs` の内訳の総和が 8 に満たなくなる）。
+   */
+  malformedSlugs: string[];
 }
 
 export interface RelayHealth {
@@ -77,6 +84,7 @@ function inspectScope(scope: DoctorScope, path: string, port: number): DoctorHoo
       installedSlugs: [],
       missingSlugs: HOOKS_SPEC.map((e) => e.slug),
       duplicateSlugs: [],
+      malformedSlugs: [],
     };
   }
 
@@ -89,6 +97,7 @@ function inspectScope(scope: DoctorScope, path: string, port: number): DoctorHoo
       installedSlugs: [],
       missingSlugs: HOOKS_SPEC.map((e) => e.slug),
       duplicateSlugs: [],
+      malformedSlugs: [],
     };
   }
 
@@ -105,6 +114,7 @@ function inspectScope(scope: DoctorScope, path: string, port: number): DoctorHoo
     installedSlugs: dryRun.skippedIdempotentSlugs,
     missingSlugs: dryRun.addedSlugs,
     duplicateSlugs: dryRun.skippedDuplicateSlugs,
+    malformedSlugs: dryRun.skippedMalformedSlugs,
   };
 }
 

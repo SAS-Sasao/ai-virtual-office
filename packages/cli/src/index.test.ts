@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { runCli, parseFlags, HELP_TEXT, type CliDeps } from "./index.js";
+import { runCli, parseFlags, formatDoctorReport, HELP_TEXT, type CliDeps } from "./index.js";
 import type { ResolvedPaths } from "./paths.js";
+import type { DoctorReport } from "./doctor.js";
 
 const PATHS: ResolvedPaths = {
   userSettingsPath: "/fixture/user-settings.json",
@@ -156,6 +157,69 @@ describe("runCli", () => {
     const code = await runCli(["frobnicate"], deps);
     expect(code).not.toBe(0);
     expect(deps.error).toHaveBeenCalled();
+  });
+
+  it("M1-3 繰り越し#5: doctor レポートに malformed の内訳が警告として出力される", async () => {
+    const report: DoctorReport = {
+      hooks: [
+        {
+          scope: "user",
+          path: "/fixture/user-settings.json",
+          exists: true,
+          parseError: false,
+          installedSlugs: ["session-start", "user-prompt", "pre-tool", "notification", "stop", "subagent-stop", "session-end"],
+          missingSlugs: [],
+          duplicateSlugs: [],
+          malformedSlugs: ["post-tool"],
+        },
+        {
+          scope: "project",
+          path: "/fixture/project-settings.json",
+          exists: false,
+          parseError: false,
+          installedSlugs: [],
+          missingSlugs: ["session-start", "user-prompt", "pre-tool", "post-tool", "notification", "stop", "subagent-stop", "session-end"],
+          duplicateSlugs: [],
+          malformedSlugs: [],
+        },
+        {
+          scope: "user-local",
+          path: "/fixture/user-settings.local.json",
+          exists: false,
+          parseError: false,
+          installedSlugs: [],
+          missingSlugs: ["session-start", "user-prompt", "pre-tool", "post-tool", "notification", "stop", "subagent-stop", "session-end"],
+          duplicateSlugs: [],
+          malformedSlugs: [],
+        },
+        {
+          scope: "project-local",
+          path: "/fixture/project-settings.local.json",
+          exists: false,
+          parseError: false,
+          installedSlugs: [],
+          missingSlugs: ["session-start", "user-prompt", "pre-tool", "post-tool", "notification", "stop", "subagent-stop", "session-end"],
+          duplicateSlugs: [],
+          malformedSlugs: [],
+        },
+      ],
+      relay: { reachable: true, health: undefined },
+      hooksInstalled: true,
+      eventReachedWarning: false,
+      fatalReasons: [],
+      exitCode: 0,
+    };
+
+    const output = formatDoctorReport(report);
+
+    expect(output).toContain("post-tool");
+    expect(output.toLowerCase()).toContain("malformed");
+
+    const deps = makeDeps({ runDoctor: vi.fn(async () => report) });
+    await runCli(["doctor"], deps);
+    const logged = (deps.log as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]).join("\n");
+    expect(logged).toContain("post-tool");
+    expect(logged.toLowerCase()).toContain("malformed");
   });
 
   it("Phase3 finding8: runCli は deps の想定外の例外を握り潰さず伝播する(ボトムの .catch() が最後の安全網である前提を保証する)", async () => {

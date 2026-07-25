@@ -317,6 +317,77 @@ describe("runDoctor", () => {
     }
   });
 
+  it("M1-3 繰り越し#5: malformed な設定は malformedSlugs に分類され、installed+duplicate+missing+malformed の総和は常に8になる", async () => {
+    const { dir, paths } = makeTmpPaths();
+    try {
+      // PostToolUse の値が配列でない(壊れた/未知形状)。merge.ts の malformed 判定にかかる。
+      writeFileSync(
+        paths.userSettingsPath,
+        JSON.stringify({ hooks: { PostToolUse: "my-precious-guard.sh" } }),
+        "utf-8",
+      );
+
+      const fetchImpl = vi.fn(async () =>
+        jsonResponse({
+          ok: true,
+          version: "0.0.0",
+          testMode: false,
+          pid: 123,
+          port: 4100,
+          receivedCount: 0,
+          lastEventAt: null,
+        }),
+      );
+
+      const report = await runDoctor({ paths, port: 4100, fetchImpl });
+      const userStatus = report.hooks.find((h) => h.scope === "user");
+
+      expect(userStatus?.malformedSlugs).toContain("post-tool");
+
+      const total =
+        (userStatus?.installedSlugs.length ?? 0) +
+        (userStatus?.duplicateSlugs.length ?? 0) +
+        (userStatus?.missingSlugs.length ?? 0) +
+        (userStatus?.malformedSlugs.length ?? 0);
+      expect(total).toBe(8);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("M1-3 繰り越し#5: malformed が無い通常ケースでも内訳の総和は8のまま(回帰防止)", async () => {
+    const { dir, paths } = makeTmpPaths();
+    try {
+      writeFileSync(paths.userSettingsPath, JSON.stringify({ hooks: {} }), "utf-8");
+      runSetup({ targetPath: paths.userSettingsPath, scope: "user", port: 4100 });
+
+      const fetchImpl = vi.fn(async () =>
+        jsonResponse({
+          ok: true,
+          version: "0.0.0",
+          testMode: false,
+          pid: 123,
+          port: 4100,
+          receivedCount: 0,
+          lastEventAt: null,
+        }),
+      );
+
+      const report = await runDoctor({ paths, port: 4100, fetchImpl });
+      const userStatus = report.hooks.find((h) => h.scope === "user");
+
+      expect(userStatus?.malformedSlugs).toEqual([]);
+      const total =
+        (userStatus?.installedSlugs.length ?? 0) +
+        (userStatus?.duplicateSlugs.length ?? 0) +
+        (userStatus?.missingSlugs.length ?? 0) +
+        (userStatus?.malformedSlugs.length ?? 0);
+      expect(total).toBe(8);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("壊れた JSON の設定ファイルがあってもクラッシュしない（parseError として報告）", async () => {
     const { dir, paths } = makeTmpPaths();
     try {

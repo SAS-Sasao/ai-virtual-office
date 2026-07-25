@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mergeHooks, removeHooks } from "./merge.js";
-import { HOOKS_SPEC, MARKER } from "./hooks-spec.js";
+import { HOOKS_SPEC, MARKER, buildCommand } from "./hooks-spec.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 // 本リポジトリ自身の .claude/settings.json を fixture として使う（人工的な整形の
@@ -159,6 +159,99 @@ describe("mergeHooks", () => {
     expect(untouchedEmpty).toEqual({ matcher: "*", hooks: [] });
     const ours = preToolGroups.find((g) => g.hooks.length > 0);
     expect(ours?.hooks[0].command).toContain(MARKER);
+  });
+
+  it("M1-3 繰り越し#4: 元は空グループが温存された状態(finding9)に、ユーザーが後から別の hook を追記してから再 setup しても CLI 由来のエントリは1本のまま", () => {
+    // 1回目の setup: 元々あった空グループには追記せず、新規グループを別途作る(finding9)。
+    const fixture = {
+      hooks: {
+        PreToolUse: [{ matcher: "*", hooks: [] }],
+      },
+    };
+    const afterFirstSetup = mergeHooks(fixture, HOOKS_SPEC, PORT);
+    const settingsAfterFirst = afterFirstSetup.settings as { hooks: Record<string, unknown> };
+    const groupsAfterFirst = settingsAfterFirst.hooks.PreToolUse as Array<{
+      matcher?: string;
+      hooks: Array<{ command: string }>;
+    }>;
+    expect(groupsAfterFirst).toHaveLength(2);
+
+    // ユーザーが手動で、元々空だった方(1つ目)のグループに自分の hook を追記する。
+    const emptyGroup = groupsAfterFirst.find((g) => g.hooks.length === 0);
+    expect(emptyGroup).toBeDefined();
+    emptyGroup!.hooks.push({ command: "my-own-guard.sh" });
+    // これで PreToolUse には「非CLIの1本を持つグループ」と「CLI の1本を持つグループ」の
+    // 2つの非空グループが matcher "*" で並存する状態になる。
+
+    // 再 setup（同一 port）。CLI 由来のエントリが 2 本目として追加されてはならない。
+    const afterSecondSetup = mergeHooks(settingsAfterFirst, HOOKS_SPEC, PORT);
+    expect(afterSecondSetup.addedSlugs).not.toContain("pre-tool");
+    expect(afterSecondSetup.skippedIdempotentSlugs).toContain("pre-tool");
+
+    const settingsAfterSecond = afterSecondSetup.settings as { hooks: Record<string, unknown> };
+    const groupsAfterSecond = settingsAfterSecond.hooks.PreToolUse as Array<{
+      matcher?: string;
+      hooks: Array<{ command: string }>;
+    }>;
+    const allCommands = groupsAfterSecond.flatMap((g) => g.hooks.map((h) => h.command));
+    const cliCommandCount = allCommands.filter((c) => c.includes(MARKER)).length;
+    expect(cliCommandCount).toBe(1);
+  });
+
+  it("M1-3 繰り越し#4: 同一 matcher の非空グループが最初から2つある状態(手動編集で作られた設定)で setup しても CLI 由来のエントリは1本のまま", () => {
+    const fixture = {
+      hooks: {
+        PreToolUse: [
+          { matcher: "*", hooks: [{ type: "command", command: "other-tool.sh" }] },
+          { matcher: "*", hooks: [{ type: "command", command: buildCommand("pre-tool", PORT) }] },
+        ],
+      },
+    };
+
+    const result = mergeHooks(fixture, HOOKS_SPEC, PORT);
+
+    expect(result.addedSlugs).not.toContain("pre-tool");
+    expect(result.skippedIdempotentSlugs).toContain("pre-tool");
+
+    const settings = result.settings as { hooks: Record<string, unknown> };
+    const groups = settings.hooks.PreToolUse as Array<{ matcher?: string; hooks: Array<{ command: string }> }>;
+    const allCommands = groups.flatMap((g) => g.hooks.map((h) => h.command));
+    const cliCommandCount = allCommands.filter((c) => c.includes(MARKER)).length;
+    expect(cliCommandCount).toBe(1);
+    // 1つ目のグループ(他ツール由来)は変更されていない
+    expect(groups[0].hooks).toEqual([{ type: "command", command: "other-tool.sh" }]);
+  });
+
+  it("M1-3 繰り越し#6: URL を言及するだけで実際には POST しないコマンド(echo 等)は配線済み(duplicate)と誤認しない", () => {
+    const fixture = {
+      hooks: {
+        Stop: [
+          {
+            hooks: [
+              {
+                type: "command",
+                // URL を含むが curl で POST しているわけではない(ログ出力等の言及のみ)。
+                command: `echo "see http://localhost:${PORT}/hooks/stop for details"`,
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = mergeHooks(fixture, HOOKS_SPEC, PORT);
+
+    // 実際には配線されていないので、CLI は通常どおり自分のエントリを追加してよい。
+    expect(result.skippedDuplicateSlugs).not.toContain("stop");
+    expect(result.addedSlugs).toContain("stop");
+
+    const settings = result.settings as { hooks: Record<string, unknown> };
+    const stopGroups = settings.hooks.Stop as Array<{ hooks: Array<{ command: string }> }>;
+    const allCommands = stopGroups.flatMap((g) => g.hooks.map((h) => h.command));
+    // 元の echo コマンドは変更されず残っている
+    expect(allCommands.some((c) => c.includes("echo"))).toBe(true);
+    // CLI 由来のマーカー付きエントリも追加されている
+    expect(allCommands.filter((c) => c.includes(MARKER))).toHaveLength(1);
   });
 
   it("既存に何も無いイベントには新規グループを作成する", () => {
