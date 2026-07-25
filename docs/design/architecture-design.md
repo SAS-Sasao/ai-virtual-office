@@ -2,6 +2,7 @@
 
 > 作成日: 2026-07-17 | 作成者: SAS-Sasao（秘書室 direct）| ステータス: draft
 > 更新: 2026-07-20 — フロントモック v3 の取り込みに伴い **§5.1 オフィス描画のレイヤー構成**を新設（[ADR-002](./decision-log.md)）
+> 更新: 2026-07-25 — M1-3 に伴い **§5 のリポジトリ構成**を改訂: 帰属の実行時 lookup を `relay/src/attribute.ts` へ、cc-sier-adapter は `attribution-index.ts`（attribution.json 生成）に（[ADR-003](./decision-log.md) も参照）
 > 参考: [【pixel-agents-hq/pixel-agents】](https://github.com/pixel-agents-hq/pixel-agents) / [【Zenn: Pixel Agents 紹介記事】](https://zenn.dev/and_dot/articles/d987d07720929430)
 
 ## 1. 目的とスコープ
@@ -132,6 +133,7 @@ ai-virtual-office/
 │   │   └── src/
 │   │       ├── server.ts       ← POST /hooks/:event 受信 + GET /health（観測統計）
 │   │       ├── normalize.ts    ← Claude hooks JSON → OfficeEvent 変換
+│   │       ├── attribute.ts    ← 帰属の汎用 lookup（attribution.json を読むだけ。CC-SIer 非依存）
 │   │       ├── seq.ts          ← シーケンス番号の永続採番
 │   │       ├── buffer.ts       ← 再送バッファ
 │   │       └── forward.ts      ← ローカル/クラウドへの転送
@@ -144,8 +146,11 @@ ai-virtual-office/
 │   └── cc-sier-adapter/        ← CC-SIer 組織インポータ（§10、コア要件）
 │       └── src/
 │           ├── import-org.ts   ← masters/*.md → OfficeLayout + Character[] 生成
-│           ├── import-tasklog.ts ← .task-log/*.md → OfficeEvent[]（リプレイ用）
-│           └── attribute.ts    ← ライブセッション → 部署/ロール帰属の推定
+│           ├── import-tasklog.ts ← .task-log/*.md → OfficeEvent[]（リプレイ用。M2）
+│           └── attribution-index.ts ← 帰属インデックス（attribution.json）の生成
+│               ※ 帰属の実行時 lookup は relay/src/attribute.ts。CC-SIer の知識は
+│                  adapter が attribution.json に正規化して渡し、relay は CC-SIer を知らない
+│                  （プログレッシブ・ディスクロージャ。M1-3 で旧 attribute.ts 案から変更）
 ├── docs/
 │   ├── architecture.md
 │   └── claude-setup.md         ← §6 の内容を利用者向けに転記

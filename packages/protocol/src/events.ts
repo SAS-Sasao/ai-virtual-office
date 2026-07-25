@@ -1,8 +1,9 @@
 // 本ファイルが OfficeEvent の唯一の正本。他パッケージは z.infer で型導出のみ行い
 // 再定義しないこと。
 //
-// org / dept / role は M1-3（帰属推定）で追加予定。state はイベントに持たせない
-// （mapping.toolToState で導出する派生値であり、OfficeEvent 自体は持たない）。
+// org / dept / role は M1-3（帰属推定）で追加された FR-4 の出力（すべて optional）。
+// state はイベントに持たせない（mapping.toolToState で導出する派生値であり、
+// OfficeEvent 自体は持たない）。
 import { z } from "zod";
 
 /**
@@ -46,6 +47,9 @@ export const OfficeEventSchema = z.object({
   subagentType: z.string().optional(),
   ts: z.number(),
   seq: z.number().int().nonnegative().optional(),
+  org: z.string().optional(),
+  dept: z.string().optional(),
+  role: z.string().optional(),
 });
 
 export type OfficeEvent = z.infer<typeof OfficeEventSchema>;

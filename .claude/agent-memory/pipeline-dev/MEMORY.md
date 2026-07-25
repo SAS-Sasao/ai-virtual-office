@@ -10,3 +10,4 @@
 - [m1-2b-relay-health-stats](project_m1_2b_relay_health_stats.md) — /health にreceivedCount/lastEventAt追加: なぜ/test/injectを使わないか・stats.tsのDIパターン・toEqual拡張作法
 - [m1-2b-cli-setup-doctor-teardown](project_m1_2b_cli_setup_doctor_teardown.md) — packages/cli新規作成+Phase3レビュー9件修正: マーカーは完全一致のみで判定・removeHooksはhooksキー条件付き削除・空グループはmergeHooks側で保護・npx symlinkはstdout内容まで検証必須
 - [m1-3-carryover-fixes](project_m1_3_carryover_fixes.md) — M1-3冒頭の繰り越し6件: vi.spyOnがESM named importに効く確認・GET内await無しでSSE順序を同期テスト・mergeHooksの複数非空グループ冪等バグ・URL部分一致の緩さ修正・doctor malformedSlugs欠落
+- [m1-3-relay-attribution](project_m1_3_relay_attribution.md) — relay帰属推定(FR-4): 並行作業のスキーマ待ちポーリング法・規則3のorg上書き・.git/HEAD異常系は握り潰し一本化・cwd前方一致の境界・TTLキャッシュのnow注入テスト・office-stateのキー省略パススルー
