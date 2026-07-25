@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
+import type { OfficeEvent } from "@ai-office/protocol";
 import { OfficeState } from "./office-state";
 import { buildRuntimeLayout } from "./layout-runtime";
 import { Scene } from "./scene";
 import { startRenderer } from "./renderer";
 import type { CanvasFactory, DrawableCanvas } from "./sprites";
-import { REAL_SHAPE_FLOOR } from "./fixtures/real-layout-fixture";
+import { REAL_SHAPE_CHARACTERS, REAL_SHAPE_FLOOR } from "./fixtures/real-layout-fixture";
 
 /** 第 2 フロア（別 org）。z0〜z2 のフロア別キャッシュ検証に使う。 */
 const SECOND_FLOOR = { ...REAL_SHAPE_FLOOR, org: "jutaku-dev-team" };
+
+function ev(partial: Partial<OfficeEvent> & Pick<OfficeEvent, "type" | "sessionId" | "ts">): OfficeEvent {
+  return partial;
+}
 
 function createStubCanvasFactory(): { factory: CanvasFactory; created: DrawableCanvas[] } {
   const created: DrawableCanvas[] = [];
@@ -99,6 +104,48 @@ function buildTestScene(floors = [REAL_SHAPE_FLOOR]) {
   // （AC-8 の対象は z0〜z2 の静的レイヤーであり、z3 のスプライト構築回数と混同しない）。
   const scene = new Scene(runtimeLayout, [], officeState, { fastMode: true });
   return { runtimeLayout, scene };
+}
+
+function buildTestSceneWithRoster() {
+  const runtimeLayout = buildRuntimeLayout({ version: 1, floors: [REAL_SHAPE_FLOOR] }, REAL_SHAPE_CHARACTERS);
+  const officeState = new OfficeState();
+  const scene = new Scene(runtimeLayout, REAL_SHAPE_CHARACTERS, officeState, { fastMode: true });
+  return { runtimeLayout, scene, officeState };
+}
+
+/** strokeRect/fillText の呼び出しを記録するメイン canvas スタブ（M1-4b: フォーカスリング・sub ラベル・ホバーカードの検証用）。 */
+function createMainCanvasRecordingStub(): {
+  canvas: HTMLCanvasElement;
+  strokeRectCalls: Array<{ strokeStyle: unknown; x: number; y: number; w: number; h: number }>;
+  fillTextCalls: Array<{ text: string; x: number; y: number }>;
+} {
+  const strokeRectCalls: Array<{ strokeStyle: unknown; x: number; y: number; w: number; h: number }> = [];
+  const fillTextCalls: Array<{ text: string; x: number; y: number }> = [];
+  const ctx = {
+    fillStyle: "#000000",
+    strokeStyle: "#000000",
+    lineWidth: 1,
+    globalAlpha: 1,
+    font: "10px monospace",
+    textAlign: "left" as CanvasTextAlign,
+    fillRect: () => {},
+    strokeRect: (x: number, y: number, w: number, h: number) => {
+      strokeRectCalls.push({ strokeStyle: ctx.strokeStyle, x, y, w, h });
+    },
+    fillText: (text: string, x: number, y: number) => {
+      fillTextCalls.push({ text, x, y });
+    },
+    drawImage: () => {},
+    save: () => {},
+    restore: () => {},
+    translate: () => {},
+  };
+  const canvas = {
+    width: 960,
+    height: 540,
+    getContext: (kind: string) => (kind === "2d" ? ctx : null),
+  };
+  return { canvas: canvas as unknown as HTMLCanvasElement, strokeRectCalls, fillTextCalls };
 }
 
 // 静的レイヤーの canvas は cols*tileSize x rows*tileSize（フロア全体）で作られる。
@@ -225,5 +272,127 @@ describe("startRenderer: lifecycle", () => {
     // stop 後にキューへ積まれた次フレームは無い（cancel 済み）ため、pump しても何も起きない
     raf.pump(16);
     expect(drawImageCalls).toHaveLength(1);
+  });
+});
+
+describe("startRenderer: focus ring / sub label / hover card (M1-4b AC-4/AC-6)", () => {
+  it("draws exactly one focus ring (#ffd166 stroke) for the character matching scene.focusSessionId, per frame", () => {
+    const { runtimeLayout, scene, officeState } = buildTestSceneWithRoster();
+    officeState.applyEvent(
+      ev({ type: "session_start", sessionId: "sess-1", ts: 1000, org: "domain-tech-collection", dept: "dept-research", role: "tech-researcher" }),
+    );
+    scene.focusSessionId("sess-1");
+
+    const { factory } = createStubCanvasFactory();
+    const { canvas, strokeRectCalls } = createMainCanvasRecordingStub();
+    const raf = createManualRaf();
+
+    const handle = startRenderer(canvas, scene, runtimeLayout, {
+      canvasFactory: factory,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+    });
+
+    raf.pump(0);
+
+    const ringCalls = strokeRectCalls.filter((c) => c.strokeStyle === "#ffd166");
+    expect(ringCalls).toHaveLength(1);
+
+    handle.stop();
+  });
+
+  it("does not draw a focus ring when no character matches scene.focusSessionId (unfocused)", () => {
+    const { runtimeLayout, scene } = buildTestSceneWithRoster();
+
+    const { factory } = createStubCanvasFactory();
+    const { canvas, strokeRectCalls } = createMainCanvasRecordingStub();
+    const raf = createManualRaf();
+
+    const handle = startRenderer(canvas, scene, runtimeLayout, {
+      canvasFactory: factory,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+    });
+
+    raf.pump(0);
+
+    expect(strokeRectCalls.filter((c) => c.strokeStyle === "#ffd166")).toHaveLength(0);
+
+    handle.stop();
+  });
+
+  it("draws a 'sub' label for subagent (kind: 'sub') characters", () => {
+    const { runtimeLayout, scene, officeState } = buildTestSceneWithRoster();
+    officeState.applyEvent(ev({ type: "session_start", sessionId: "sess-1", ts: 1000, org: "domain-tech-collection" }));
+    officeState.applyEvent(
+      ev({ type: "pre_tool", sessionId: "sess-1", toolName: "Task", subagentType: "a", ts: 1100, org: "domain-tech-collection", dept: "dept-research" }),
+    );
+
+    const { factory } = createStubCanvasFactory();
+    const { canvas, fillTextCalls } = createMainCanvasRecordingStub();
+    const raf = createManualRaf();
+
+    const handle = startRenderer(canvas, scene, runtimeLayout, {
+      canvasFactory: factory,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+    });
+
+    raf.pump(0);
+
+    expect(fillTextCalls.some((c) => c.text === "sub")).toBe(true);
+
+    handle.stop();
+  });
+
+  it("draws the hover detail card exactly once (state-colored border) when scene.getHoveredCharacter() is set", () => {
+    const { runtimeLayout, scene, officeState } = buildTestSceneWithRoster();
+    officeState.applyEvent(
+      ev({ type: "session_start", sessionId: "sess-1", ts: 1000, org: "domain-tech-collection", dept: "dept-research", role: "tech-researcher" }),
+    );
+    // researcher の自席 (2,4) を指す（AC-6 のヒットテストと同じ計算）
+    scene.setPointer(2 * REAL_SHAPE_FLOOR.grid.tileSize + 5, 4 * REAL_SHAPE_FLOOR.grid.tileSize + 5);
+    expect(scene.getHoveredCharacter()).not.toBeNull();
+
+    const { factory } = createStubCanvasFactory();
+    const { canvas, strokeRectCalls, fillTextCalls } = createMainCanvasRecordingStub();
+    const raf = createManualRaf();
+
+    const handle = startRenderer(canvas, scene, runtimeLayout, {
+      canvasFactory: factory,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+    });
+
+    raf.pump(0);
+
+    // カード枠は状態色（claim 直後は post_tool 等が無いので idle 色 "#9aa0b8"）。
+    // カードの幅（168px）で他の strokeRect（オーバーレイの吹き出し枠等）と区別する。
+    const cardBorderCalls = strokeRectCalls.filter((c) => c.strokeStyle === "#9aa0b8" && c.w === 168);
+    expect(cardBorderCalls).toHaveLength(1);
+    // 部署の行がカード本文に描画されている
+    expect(fillTextCalls.some((c) => c.text === "dept-research")).toBe(true);
+
+    handle.stop();
+  });
+
+  it("does not draw the hover card when nothing is hovered", () => {
+    const { runtimeLayout, scene } = buildTestSceneWithRoster();
+
+    const { factory } = createStubCanvasFactory();
+    const { canvas, strokeRectCalls } = createMainCanvasRecordingStub();
+    const raf = createManualRaf();
+
+    const handle = startRenderer(canvas, scene, runtimeLayout, {
+      canvasFactory: factory,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+    });
+
+    raf.pump(0);
+
+    expect(strokeRectCalls.filter((c) => c.w === 168)).toHaveLength(0);
+
+    handle.stop();
   });
 });

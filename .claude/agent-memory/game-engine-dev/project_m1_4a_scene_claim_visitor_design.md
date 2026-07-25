@@ -30,7 +30,13 @@ existing AC (AC-4/AC-5) happens to exercise the "attribution resolves late" orde
 duplicate ghost visitor when late-arriving attribution turns a visitor into a claim` in
 `scene.test.ts`, added specifically for this).
 
-**Known deferred gap**: subagent sessions (`Task`-spawned, `subagentType` on the raw
+**RESOLVED in M1-4b**: the deferred gap below (subagent → meeting-room routing) was closed
+in M1-4b. See [[project_m1_4b_subagent_spawn_and_tile_allocation]] for the actual design
+(`activeSubagents` on `SessionCharacter` + `scene.ts` spawning dedicated `kind: "sub"`
+child characters). The paragraph below is kept for history only — `resolveVisitorDestination`
+it references no longer exists (replaced by `resolveDestination`).
+
+**Known deferred gap (M1-4a, historical)**: subagent sessions (`Task`-spawned, `subagentType` on the raw
 `OfficeEvent`) were supposed to route to a meeting room per the M1-4a design memo item 3,
 but `office-state.ts`'s `SessionCharacter` (frozen this cycle — out of game-engine-dev's
 scope) never surfaces `subagentType` in its snapshot. Without that signal, `scene.ts`

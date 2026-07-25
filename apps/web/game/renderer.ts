@@ -1,6 +1,6 @@
 import type { CharacterState } from "@ai-office/protocol";
 import type { RuntimeFloor, RuntimeLayout } from "./layout-runtime";
-import type { RuntimeCharacter } from "./scene";
+import type { HoveredCharacterDetail, RuntimeCharacter } from "./scene";
 import { Scene } from "./scene";
 import {
   createGeneratedSpriteSheet,
@@ -61,6 +61,14 @@ const STATE_COLORS: Record<CharacterState, string> = {
   walk: "#9aa0b8",
   leave: "#6a7194",
 };
+
+// M1-4b: フォーカスリング・ホバー詳細カード（docs/design/ui/README.md 抽出仕様 2）。
+const FOCUS_RING_COLOR = "#ffd166";
+const SUB_LABEL_TEXT_COLOR = "#9aa0b8";
+const CARD_BG_COLOR = "#12152a";
+const CARD_WIDTH_PX = 168;
+const CARD_HEIGHT_PX = 96;
+const CARD_MARGIN_PX = 6;
 
 const WAITING_BLINK_PERIOD_MS = 500;
 const BOB_PERIOD_MS = 2600;
@@ -220,6 +228,7 @@ export function startRenderer(
 
     const tileSize = runtimeFloor.floor.grid.tileSize;
     const fastMode = scene.isFastMode();
+    const focusedSessionId = scene.getFocusedSessionId();
 
     for (const character of scene.getRuntimeCharacters()) {
       if (character.org !== currentOrg) continue;
@@ -242,6 +251,22 @@ export function startRenderer(
 
       // z4: オーバーレイ（名前・状態の吹き出し。idle/walk は吹き出し無し）
       drawOverlay(ctx, character, screenX, screenY);
+
+      // z4: subagent の "sub" 小ラベル（M1-4b）
+      if (character.kind === "sub") {
+        drawSubLabel(ctx, screenX, screenY, tileSize);
+      }
+
+      // z4: フォーカスリング（セッション一覧クリック → focusSessionId、M1-4b）
+      if (focusedSessionId !== null && character.sessionId === focusedSessionId) {
+        drawFocusRing(ctx, screenX, screenY, tileSize);
+      }
+    }
+
+    // z4: ホバー詳細カード（setPointer のヒットテスト結果。M1-4b）
+    const hovered = scene.getHoveredCharacter();
+    if (hovered) {
+      drawHoverCard(ctx, hovered, width, height);
     }
   };
 
@@ -300,4 +325,60 @@ function drawOverlay(ctx: CanvasRenderingContext2D, character: RuntimeCharacter,
     ctx.font = "9px monospace";
     ctx.fillText(character.name, x, y + 30);
   }
+}
+
+/** subagent（kind: "sub"）を示す小ラベル（M1-4b・scene.ts のファイル冒頭コメント参照）。 */
+function drawSubLabel(ctx: CanvasRenderingContext2D, x: number, y: number, tileSize: number): void {
+  const label = "sub";
+  const boxWidth = label.length * 6 + 6;
+  const boxY = y + tileSize - 4;
+  ctx.fillStyle = CARD_BG_COLOR;
+  ctx.strokeStyle = SUB_LABEL_TEXT_COLOR;
+  ctx.lineWidth = 1;
+  ctx.fillRect(x, boxY, boxWidth, 10);
+  ctx.strokeRect(x, boxY, boxWidth, 10);
+  ctx.fillStyle = SUB_LABEL_TEXT_COLOR;
+  ctx.font = "8px monospace";
+  ctx.textAlign = "left";
+  ctx.fillText(label, x + 3, boxY + 8);
+}
+
+/**
+ * フォーカスリング（docs/design/ui/README.md 抽出仕様 2: `3px solid #ffd166` /
+ * offset 2px。角丸なしの pixel-art トークンに合わせ矩形で描く）。
+ */
+function drawFocusRing(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
+  ctx.strokeStyle = FOCUS_RING_COLOR;
+  ctx.lineWidth = 3;
+  ctx.strokeRect(x - 2, y - 2, size + 4, size + 4);
+}
+
+/**
+ * ホバー詳細カード（README 抽出仕様 2: 名前(ロール) / 部署 / セッション·model /
+ * 状態 / ツール / 経過。カード枠は状態色）。canvas 左上に固定表示する
+ * （キャンバス座標に依存しない固定位置。ポインタ追従は本サイクルの対象外）。
+ */
+function drawHoverCard(ctx: CanvasRenderingContext2D, hovered: HoveredCharacterDetail, canvasWidth: number, canvasHeight: number): void {
+  void canvasHeight;
+  const x = Math.max(CARD_MARGIN_PX, canvasWidth - CARD_WIDTH_PX - CARD_MARGIN_PX);
+  const y = CARD_MARGIN_PX;
+  const borderColor = STATE_COLORS[hovered.state];
+
+  ctx.fillStyle = CARD_BG_COLOR;
+  ctx.fillRect(x, y, CARD_WIDTH_PX, CARD_HEIGHT_PX);
+  ctx.strokeStyle = borderColor;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x, y, CARD_WIDTH_PX, CARD_HEIGHT_PX);
+
+  ctx.fillStyle = TEXT_PRIMARY;
+  ctx.font = "10px monospace";
+  ctx.textAlign = "left";
+
+  const nameLine = hovered.name ? `${hovered.name}(${hovered.role})` : hovered.role;
+  const sessionLine = `${hovered.sessionId ?? "-"}${hovered.model ? " · " + hovered.model : ""}`;
+  const lines = [nameLine, hovered.dept, sessionLine, hovered.state, hovered.toolName ?? "-", `${hovered.elapsedTicks}t`];
+
+  lines.forEach((line, index) => {
+    ctx.fillText(line, x + CARD_MARGIN_PX, y + 14 + index * 13);
+  });
 }
