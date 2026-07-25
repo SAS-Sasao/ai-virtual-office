@@ -189,7 +189,7 @@ describe("OfficeEventSchema", () => {
 });
 
 describe("CharacterStateSchema", () => {
-  it("accepts all 8 documented states", () => {
+  it("accepts all 10 documented states", () => {
     const states = [
       "idle",
       "type",
@@ -199,6 +199,8 @@ describe("CharacterStateSchema", () => {
       "thinking",
       "waiting",
       "done",
+      "walk",
+      "leave",
     ];
 
     for (const state of states) {
@@ -215,5 +217,12 @@ describe("CharacterStateSchema", () => {
   it("infers a CharacterState type usable as a literal union", () => {
     const state: CharacterState = "idle";
     expect(CharacterStateSchema.safeParse(state).success).toBe(true);
+  });
+
+  it("infers walk/leave as valid CharacterState literals (M1-4a: move-derived states)", () => {
+    const walking: CharacterState = "walk";
+    const leaving: CharacterState = "leave";
+    expect(CharacterStateSchema.safeParse(walking).success).toBe(true);
+    expect(CharacterStateSchema.safeParse(leaving).success).toBe(true);
   });
 });

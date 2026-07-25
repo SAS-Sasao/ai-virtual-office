@@ -2,9 +2,41 @@
 
 import { useEffect, useRef, useState } from "react";
 import { attachDebug } from "../game/debug";
+import { buildRuntimeLayout } from "../game/layout-runtime";
 import { OfficeState } from "../game/office-state";
-import { OfficeEventSchema } from "@ai-office/protocol";
-import { startRenderer } from "../game/renderer";
+import { OfficeEventSchema, type Character, type OfficeLayout } from "@ai-office/protocol";
+import { startRenderer, type RendererHandle } from "../game/renderer";
+import { Scene } from "../game/scene";
+
+/** `GET /api/layout` のレスポンス形状（apps/web/lib/layout.ts の OfficeLayoutData と同じ契約）。 */
+interface LayoutApiResponse {
+  layout: OfficeLayout | null;
+  characters: Character[];
+}
+
+const EMPTY_LAYOUT_RESPONSE: LayoutApiResponse = { layout: null, characters: [] };
+
+/**
+ * `/api/layout` を取得する。ネットワーク不通・非 200・parse 失敗のいずれでも
+ * 例外を投げず、レイアウト未インポート環境と同じ `{layout: null, characters: []}`
+ * にフォールバックする（NFR-2 と同じ「壊れたデータで落ちない」思想。API 側は
+ * 常に 200 を返す契約だが、fetch 自体が失敗するケース（サーバ未起動等）まで
+ * この関数で吸収する）。
+ */
+async function fetchLayoutData(): Promise<LayoutApiResponse> {
+  try {
+    const res = await fetch("/api/layout");
+    if (!res.ok) return EMPTY_LAYOUT_RESPONSE;
+    return (await res.json()) as LayoutApiResponse;
+  } catch {
+    return EMPTY_LAYOUT_RESPONSE;
+  }
+}
+
+/** `?e2e=1` を fast-mode フラグとして読む（NFR-8）。アニメ時間 0 化のみに使う。 */
+function readFastModeFlag(search: string): boolean {
+  return new URLSearchParams(search).get("e2e") === "1";
+}
 
 // デザイントークン（docs/design/ui/README.md 抽出仕様1）。
 const PANEL_BG = "#241a10";
@@ -29,18 +61,60 @@ const PRUNE_INTERVAL_MS = 30_000;
 export default function OfficePage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const officeStateRef = useRef<OfficeState | null>(null);
+  const sceneRef = useRef<Scene | null>(null);
 
   const [connected, setConnected] = useState(false);
   const [sessionCount, setSessionCount] = useState(0);
 
   useEffect(() => {
+    let disposed = false;
+    let rendererHandle: RendererHandle | null = null;
+
     const state = new OfficeState();
     officeStateRef.current = state;
 
-    attachDebug(state);
+    const fastMode = readFastModeFlag(window.location.search);
 
-    const canvas = canvasRef.current;
-    const stopRenderer = canvas ? startRenderer(canvas, state) : () => {};
+    // 初期化は /api/layout の fetch 完了を待つ非同期処理だが、SSE 購読・prune
+    // タイマー・接続表示は（layout の有無に関わらず）即座に開始する。scene/
+    // renderer はレイアウト取得後に組み立て、アンマウント時は disposed フラグで
+    // 後始末の二重実行・アンマウント後の起動を防ぐ。
+    const init = async (): Promise<void> => {
+      const { layout, characters } = await fetchLayoutData();
+      if (disposed) return;
+
+      const runtimeLayout = buildRuntimeLayout(layout, characters);
+      const scene = new Scene(runtimeLayout, characters, state, { fastMode });
+      sceneRef.current = scene;
+
+      attachDebug(scene, runtimeLayout);
+
+      const canvas = canvasRef.current;
+      if (canvas) {
+        // canvas の解像度（描画座標系）は layout の grid（cols/rows × tileSize）
+        // から算出する。layout null 時は buildRuntimeLayout が組み立てる
+        // フォールバックレイアウトの寸法になる。JSX 側の width/height は初回
+        // 描画までのプレースホルダで、値は変えず imperative に上書きする
+        // （React は同一リテラル props を再適用しないため、以後の再レンダリング
+        // でも上書きは保持される）。
+        const grid = runtimeLayout.floors[0]?.floor.grid;
+        if (grid) {
+          canvas.width = grid.cols * grid.tileSize;
+          canvas.height = grid.rows * grid.tileSize;
+        }
+
+        rendererHandle = startRenderer(canvas, scene, runtimeLayout, {
+          canvasFactory: (width, height) => {
+            const offscreen = document.createElement("canvas");
+            offscreen.width = width;
+            offscreen.height = height;
+            return offscreen;
+          },
+        });
+      }
+    };
+
+    void init();
 
     const unsubscribe = state.subscribe(() => {
       setSessionCount(state.getSnapshot().sessions.length);
@@ -86,8 +160,11 @@ export default function OfficePage() {
     }, PRUNE_INTERVAL_MS);
 
     return () => {
+      disposed = true;
       source.close();
-      stopRenderer();
+      rendererHandle?.stop();
+      sceneRef.current?.dispose();
+      sceneRef.current = null;
       clearInterval(pruneInterval);
       unsubscribe();
     };

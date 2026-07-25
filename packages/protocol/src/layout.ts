@@ -32,6 +32,25 @@ export const RoomSchema = z.object({
   h: z.number().int().positive(),
   triggers: z.array(z.string()),
   /**
+   * 部屋の境界タイル（壁）のうち、隣接する廊下タイルに面する通行可能な 1 タイル
+   * （M1-4a・破壊的変更で必須化）。
+   *
+   * **契約**: door は部屋の境界上の座標（Floor.grid のタイル単位）であり、door の
+   * 直下または直隣には必ず廊下タイル（どの部屋にも属さないタイル）が存在する。
+   * **連結性（フロア入口 → 各 active 部屋の door 経由で内部）は cc-sier-adapter が
+   * レイアウト生成時に不変条件として保証する**（BFS 検証・違反時は該当組織の生成を
+   * エラーにし、既存出力を上書きしない。cc-sier-adapter/import-org.ts の
+   * `checkFloorConnectivity` を参照）。apps/web/game 側は door 位置を推測せず、この
+   * フィールドをそのまま歩行可否グリッドの穴として扱ってよい。
+   *
+   * 手書き JSON（CC-SIer 以外の組織定義）を書く場合も、上記の連結性契約を満たす
+   * door 座標を自分で用意する責務を負う（アプリ本体はこれを検証しない）。
+   */
+  door: z.object({
+    x: z.number().int().nonnegative(),
+    y: z.number().int().nonnegative(),
+  }),
+  /**
    * true の場合、cc-sier-adapter の再インポートで生成分による上書きから保護される
    * （FR-3 の冪等性・手動編集領域の保護。マージ規則は cc-sier-adapter/import-org.ts）。
    */

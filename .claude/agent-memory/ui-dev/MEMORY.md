@@ -1,0 +1,3 @@
+- [page.tsx ↔ game/ wiring pattern](project_page_tsx_game_layer_wiring.md) — async /api/layout fetch → Scene/renderer/debug, disposed-flag cleanup, e2e flag via location.search
+- [Canvas imperative sizing](feedback_canvas_imperative_sizing.md) — set canvas.width/height via ref, not useState; why React won't clobber it
+- [Real-machine verification workflow](project_realmachine_verification_workflow.md) — cc-sier-adapter real repo import, port 3005 recipe, next build tsconfig.json side effect

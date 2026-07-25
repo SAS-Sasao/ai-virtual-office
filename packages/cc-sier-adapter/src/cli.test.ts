@@ -206,6 +206,7 @@ describe("runImport", () => {
       w: 6,
       h: 4,
       triggers: [],
+      door: { x: 3, y: 33 },
       custom: true,
     });
     deps.fs.files.set("/out/office-layout.json", JSON.stringify(layout, null, 2));

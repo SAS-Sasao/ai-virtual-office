@@ -67,11 +67,28 @@ describe("RoomSchema", () => {
     w: 11,
     h: 6,
     triggers: ["調査", "リサーチ"],
+    door: { x: 11, y: 5 },
   };
 
   it("parses a minimal valid room (custom omitted)", () => {
     const result = RoomSchema.parse(valid);
     expect(result).toEqual(valid);
+  });
+
+  it("rejects a room missing door (M1-4a: door is a required field — the connectivity contract room↔corridor, guaranteed by cc-sier-adapter at generation time; see doc comment)", () => {
+    const { door: _door, ...rest } = valid;
+    const result = RoomSchema.safeParse(rest);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a door with non-integer coordinates", () => {
+    const result = RoomSchema.safeParse({ ...valid, door: { x: 1.5, y: 0 } });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a door with a negative coordinate", () => {
+    const result = RoomSchema.safeParse({ ...valid, door: { x: -1, y: 0 } });
+    expect(result.success).toBe(false);
   });
 
   it("parses a standby room", () => {
@@ -164,6 +181,7 @@ describe("FloorSchema", () => {
         w: 11,
         h: 6,
         triggers: ["調査"],
+        door: { x: 5, y: 5 },
       },
     ],
     furniture: [{ kind: "desk", x: 1, y: 1 }],
@@ -187,6 +205,12 @@ describe("FloorSchema", () => {
 
   it("rejects an invalid nested room (bad status)", () => {
     const badRoom = { ...valid.rooms[0], status: "closed" };
+    const result = FloorSchema.safeParse({ ...valid, rooms: [badRoom] });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an invalid nested room (missing door)", () => {
+    const { door: _door, ...badRoom } = valid.rooms[0];
     const result = FloorSchema.safeParse({ ...valid, rooms: [badRoom] });
     expect(result.success).toBe(false);
   });

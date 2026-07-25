@@ -211,6 +211,231 @@ export const DEPARTMENTS_MD_UNKNOWN_KEY = `# 部署一覧
 - **トリガーワード**: []
 `;
 
+/**
+ * 実マスタのコピー: jutaku-dev-team/masters/organization.md（2026-07-25 実測）。
+ * M1-4a の連結性（AC-3b）検証で、domain-tech-collection 以外の実組織形状
+ * （6 部署・13 ロール、部署ごとのロール数に偏りがある）を fixture として使うために追加。
+ */
+export const ORGANIZATION_MD_JUTAKU = `# 組織情報
+
+- **組織名**: 受託開発チーム
+- **組織ID**: jutaku-dev-team
+- **オーナー名**: 笹尾豊樹
+- **事業内容**: 受託開発
+- **セットアップ日**: 2026-03-19
+- **COST_AWARENESS**: balanced
+`;
+
+/** 実マスタのコピー: jutaku-dev-team/masters/departments.md（6 部署、すべて active）。 */
+export const DEPARTMENTS_MD_JUTAKU = `# 部署一覧
+
+## dept-secretary
+
+- **名称**: 秘書室
+- **ステータス**: active
+- **役割**: オーナーの窓口。TODO管理、壁打ち、メモ、作業振り分け
+- **フォルダ**: .companies/jutaku-dev-team/docs/secretary/
+- **対応Subagent**: [secretary]
+- **トリガーワード**: [TODO, タスク, 壁打ち, 相談, メモ, ダッシュボード]
+
+## dept-pm
+
+- **名称**: プロジェクト管理室
+- **ステータス**: active
+- **役割**: 受託案件のプロジェクト管理
+- **フォルダ**: .companies/jutaku-dev-team/docs/pm/
+- **対応Subagent**: [project-manager]
+- **トリガーワード**: [プロジェクト, 案件, WBS, マイルストーン, 進捗, チケット]
+- **Agent Teams適性**: high
+
+## dept-architecture
+
+- **名称**: アーキテクチャ室
+- **ステータス**: active
+- **役割**: システム設計、技術選定、ADR
+- **フォルダ**: .companies/jutaku-dev-team/docs/architecture/
+- **対応Subagent**: [system-architect, data-architect]
+- **トリガーワード**: [設計, アーキテクチャ, 非機能, 技術選定, ADR, 構成図]
+- **Agent Teams適性**: high
+
+## dept-development
+
+- **名称**: 開発室
+- **ステータス**: active
+- **役割**: 実装、コードレビュー、AI駆動開発
+- **フォルダ**: .companies/jutaku-dev-team/docs/development/
+- **対応Subagent**: [lead-developer, backend-developer, frontend-developer, ai-developer]
+- **トリガーワード**: [実装, コーディング, コードレビュー, リファクタリング, 開発]
+- **Agent Teams適性**: high
+
+## dept-quality
+
+- **名称**: 品質管理室
+- **ステータス**: active
+- **役割**: テスト戦略、テスト自動化、CI/CD
+- **フォルダ**: .companies/jutaku-dev-team/docs/quality/
+- **対応Subagent**: [qa-lead, test-engineer, ci-cd-engineer]
+- **トリガーワード**: [テスト, 品質, QA, CI/CD, パイプライン, 自動化]
+- **Agent Teams適性**: medium
+
+## dept-infra
+
+- **名称**: インフラ・IaC室
+- **ステータス**: active
+- **役割**: クラウドインフラ、IaC、運用設計
+- **フォルダ**: .companies/jutaku-dev-team/docs/infra/
+- **対応Subagent**: [cloud-engineer, sre-engineer]
+- **トリガーワード**: [インフラ, IaC, Terraform, AWS, Azure, 運用, 監視, SRE]
+- **Agent Teams適性**: medium
+`;
+
+/** 実マスタのコピー: jutaku-dev-team/masters/roles.md（13 ロール、「所属部署/model」表記）。 */
+export const ROLES_MD_JUTAKU = `# ロール一覧
+
+## secretary
+
+- **Subagentファイル**: .claude/agents/secretary.md
+- **所属部署**: dept-secretary
+- **model**: opus
+- **Agent Teams時の役割**: team-lead
+
+## project-manager
+
+- **Subagentファイル**: .claude/agents/project-manager.md
+- **所属部署**: dept-pm
+- **model**: sonnet
+- **Agent Teams時の役割**: teammate
+
+## system-architect
+
+- **Subagentファイル**: .claude/agents/system-architect.md
+- **所属部署**: dept-architecture
+- **model**: opus
+- **Agent Teams時の役割**: teammate
+
+## data-architect
+
+- **Subagentファイル**: .claude/agents/data-architect.md
+- **所属部署**: dept-architecture
+- **model**: opus
+- **Agent Teams時の役割**: teammate
+
+## lead-developer
+
+- **Subagentファイル**: .claude/agents/lead-developer.md
+- **所属部署**: dept-development
+- **model**: sonnet
+- **Agent Teams時の役割**: teammate
+
+## backend-developer
+
+- **Subagentファイル**: .claude/agents/backend-developer.md
+- **所属部署**: dept-development
+- **model**: sonnet
+- **Agent Teams時の役割**: teammate
+
+## frontend-developer
+
+- **Subagentファイル**: .claude/agents/frontend-developer.md
+- **所属部署**: dept-development
+- **model**: sonnet
+- **Agent Teams時の役割**: teammate
+
+## ai-developer
+
+- **Subagentファイル**: .claude/agents/ai-developer.md
+- **所属部署**: dept-development
+- **model**: opus
+- **Agent Teams時の役割**: teammate
+
+## qa-lead
+
+- **Subagentファイル**: .claude/agents/qa-lead.md
+- **所属部署**: dept-quality
+- **model**: sonnet
+- **Agent Teams時の役割**: teammate
+
+## test-engineer
+
+- **Subagentファイル**: .claude/agents/test-engineer.md
+- **所属部署**: dept-quality
+- **model**: sonnet
+- **Agent Teams時の役割**: teammate
+
+## ci-cd-engineer
+
+- **Subagentファイル**: .claude/agents/ci-cd-engineer.md
+- **所属部署**: dept-quality
+- **model**: sonnet
+- **Agent Teams時の役割**: teammate
+
+## cloud-engineer
+
+- **Subagentファイル**: .claude/agents/cloud-engineer.md
+- **所属部署**: dept-infra
+- **model**: sonnet
+- **Agent Teams時の役割**: teammate
+
+## sre-engineer
+
+- **Subagentファイル**: .claude/agents/sre-engineer.md
+- **所属部署**: dept-infra
+- **model**: sonnet
+- **Agent Teams時の役割**: teammate
+`;
+
+/** 実マスタのコピー: standardization-initiative/masters/organization.md（2026-07-25 実測）。 */
+export const ORGANIZATION_MD_STANDARDIZATION = `# 組織情報
+
+- **組織名**: 社内標準化推進
+- **組織ID**: standardization-initiative
+- **オーナー名**: 笹尾豊樹
+- **事業内容**: 標準化活動
+- **セットアップ日**: 2026-03-19
+- **COST_AWARENESS**: balanced
+`;
+
+/** 実マスタのコピー: standardization-initiative/masters/departments.md（2 部署、すべて active）。 */
+export const DEPARTMENTS_MD_STANDARDIZATION = `# 部署一覧
+
+## dept-secretary
+
+- **名称**: 秘書室
+- **ステータス**: active
+- **役割**: オーナーの窓口。TODO管理、壁打ち、メモ、作業振り分け
+- **フォルダ**: .companies/standardization-initiative/docs/secretary/
+- **対応Subagent**: [secretary]
+- **トリガーワード**: [TODO, タスク, 壁打ち, 相談, メモ, ダッシュボード]
+
+## dept-pm
+
+- **名称**: プロジェクト管理室
+- **ステータス**: active
+- **役割**: 受託案件のプロジェクト管理
+- **フォルダ**: .companies/standardization-initiative/docs/pm/
+- **対応Subagent**: [project-manager]
+- **トリガーワード**: [プロジェクト, 案件, WBS, マイルストーン, 進捗, チケット]
+- **Agent Teams適性**: high
+`;
+
+/** 実マスタのコピー: standardization-initiative/masters/roles.md（2 ロール）。 */
+export const ROLES_MD_STANDARDIZATION = `# ロール一覧
+
+## secretary
+
+- **Subagentファイル**: .claude/agents/secretary.md
+- **所属部署**: dept-secretary
+- **model**: opus
+- **Agent Teams時の役割**: team-lead
+
+## project-manager
+
+- **Subagentファイル**: .claude/agents/project-manager.md
+- **所属部署**: dept-pm
+- **model**: sonnet
+- **Agent Teams時の役割**: teammate
+`;
+
 /** 合成エッジケース: ロールが必須の部署キーを欠落。 */
 export const ROLES_MD_MISSING_DEPT = `# ロール一覧
 
