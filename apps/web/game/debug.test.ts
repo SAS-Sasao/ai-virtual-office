@@ -66,6 +66,30 @@ describe("buildDebugState", () => {
     expect(state.pendingNotifications).toBe(1);
   });
 
+  // M1-4b AC-5（設計メモ rev.2/rev.3 で明示的に認可された意味論変更。tests.md ルール 1）:
+  // pendingNotifications のソースを「RuntimeCharacter.state === 'waiting' の件数」から
+  // 「OfficeState スナップショットの waiting セッション数」（scene.getWaitingSessionCount()
+  // 経由）へ一本化した。理由: 無帰属セッション（visitor）は受付へ向かって歩行している間
+  // RuntimeCharacter.state が "walk"（onArriveState に "waiting" を保持したまま）に
+  // なるため、旧実装（characters 側の state を数える）だと「セッションはすでに
+  // waiting なのに、歩行が終わるまでバッジ・待ちパネル・pendingNotifications が
+  // それを反映しない」歩行遅延による乖離が起きていた。この test はその乖離を red で
+  // 再現してから、ソース一本化で green にする（buildDebugState のシグネチャは不変）。
+  it("counts a session as pending even while its visitor character is still walking toward reception (no walk-delay drift — AC-5)", () => {
+    const { scene, officeState, runtimeLayout } = buildScene(false); // slow mode: 歩行が即座には終わらない
+
+    officeState.applyEvent(ev({ type: "session_start", sessionId: "visitor-1", ts: 1000, org: "domain-tech-collection" }));
+    officeState.applyEvent(ev({ type: "notification", sessionId: "visitor-1", ts: 1100, org: "domain-tech-collection" }));
+
+    // OfficeState 上のセッションはすでに waiting だが、visitor の RuntimeCharacter は
+    // まだ受付へ向けて歩行中（state === "walk"）のはず。
+    const visitor = scene.getRuntimeCharacters().find((c) => c.sessionId === "visitor-1")!;
+    expect(visitor.state).toBe("walk");
+
+    const state = buildDebugState(scene, runtimeLayout);
+    expect(state.pendingNotifications).toBe(1);
+  });
+
   it("exposes scene.getClock() as clock", () => {
     const { scene, runtimeLayout } = buildScene(false);
     scene.advance(3);

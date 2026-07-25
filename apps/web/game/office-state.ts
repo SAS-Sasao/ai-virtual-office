@@ -1,6 +1,20 @@
 import { toolToState } from "./mapping";
 import type { CharacterState, OfficeEvent } from "@ai-office/protocol";
 
+/**
+ * `PreToolUse(Task)` イベント 1 件分のスナップショット（M1-4b）。
+ * subagent は独立した session_id を持たないため（設計メモ rev.3）、その帰属
+ * （org/dept/role）と `subagentType` は親セッションの Task イベントに載る。
+ * `subagent_stop` に task id が無く厳密な対応付けができないため、push/pop は
+ * LIFO（後入れ先出し）の決定的規則で管理する。
+ */
+export interface SubagentEntry {
+  subagentType?: string;
+  org?: string;
+  dept?: string;
+  role?: string;
+}
+
 export interface SessionCharacter {
   sessionId: string;
   state: CharacterState;
@@ -16,10 +30,18 @@ export interface SessionCharacter {
    * 帰属が付いていない場合でも消さない（toolName と同じパススルー方針）。
    * セッション途中で帰属が消えないよう、後着イベントに帰属が無ければ既存の
    * 値を保持する（新しい値が来た場合のみ上書き）。
+   *
+   * 【M1-4b: Task イベントは対象外】`toolName === "Task"` の pre_tool/post_tool
+   * イベントは「呼び出された subagent 自身の帰属」を運ぶ（規則 3）ため、この
+   * org/dept/role には適用しない（適用すると親の帰属が subagent の帰属で
+   * 上書きされてしまう。旧実装のバグ・rev.3 で修正）。代わりに `activeSubagents`
+   * へ push する。
    */
   org?: string;
   dept?: string;
   role?: string;
+  /** 現在進行中の Task（subagent 呼び出し）のスタック。LIFO で push/pop する。 */
+  activeSubagents: SubagentEntry[];
 }
 
 export interface OfficeSnapshot {
@@ -64,6 +86,14 @@ function attributionPatch(ev: OfficeEvent): Pick<SessionCharacter, "org" | "dept
     patch.role = ev.role;
   }
   return patch;
+}
+
+/**
+ * `PreToolUse(Task)` イベントから、push すべき `SubagentEntry` を作る
+ * （そのイベントの org/dept/role/subagentType は subagent 自身の帰属）。
+ */
+function taskEntry(ev: OfficeEvent): SubagentEntry {
+  return { subagentType: ev.subagentType, org: ev.org, dept: ev.dept, role: ev.role };
 }
 
 /**
@@ -114,17 +144,29 @@ export class OfficeState {
         break;
       }
       case "pre_tool": {
+        const isTask = ev.toolName === "Task";
         this.upsert(ev.sessionId, {
           state: toolToState(ev.toolName),
           toolName: ev.toolName,
           lastTs: ev.ts,
           lastSeq: ev.seq,
-          ...attributionPatch(ev),
+          // Task イベントは subagent 自身の帰属を運ぶため、親セッションの
+          // org/dept/role へは適用しない（クラスコメント参照）。代わりに
+          // activeSubagents へ push する。
+          ...(isTask ? { activeSubagents: [...(existing?.activeSubagents ?? []), taskEntry(ev)] } : attributionPatch(ev)),
         });
         break;
       }
       case "post_tool": {
-        this.upsert(ev.sessionId, { state: "thinking", lastTs: ev.ts, lastSeq: ev.seq, ...attributionPatch(ev) });
+        const isTask = ev.toolName === "Task";
+        this.upsert(ev.sessionId, {
+          state: "thinking",
+          lastTs: ev.ts,
+          lastSeq: ev.seq,
+          // post_tool(Task) も subagent 自身の帰属を運ぶため同様に適用しない
+          // （rev.2 は pre_tool のみの半修正だった。rev.3 で post_tool も対象化）。
+          ...(isTask ? {} : attributionPatch(ev)),
+        });
         break;
       }
       case "user_prompt": {
@@ -135,9 +177,20 @@ export class OfficeState {
         this.upsert(ev.sessionId, { state: "waiting", lastTs: ev.ts, lastSeq: ev.seq, ...attributionPatch(ev) });
         break;
       }
-      case "stop":
-      case "subagent_stop": {
+      case "stop": {
         this.upsert(ev.sessionId, { state: "done", lastTs: ev.ts, lastSeq: ev.seq, ...attributionPatch(ev) });
+        break;
+      }
+      case "subagent_stop": {
+        // task id が無いため厳密な対応付けはできない。後入れ先出し（LIFO）で
+        // 直近に push された 1 件を pop する決定的規則（クラスコメント参照）。
+        this.upsert(ev.sessionId, {
+          state: "done",
+          lastTs: ev.ts,
+          lastSeq: ev.seq,
+          activeSubagents: (existing?.activeSubagents ?? []).slice(0, -1),
+          ...attributionPatch(ev),
+        });
         break;
       }
       default: {
@@ -195,6 +248,7 @@ export class OfficeState {
       org?: string;
       dept?: string;
       role?: string;
+      activeSubagents?: SubagentEntry[];
     },
   ): void {
     const existing = this.sessions.get(sessionId);
@@ -204,6 +258,7 @@ export class OfficeState {
       org: existing?.org,
       dept: existing?.dept,
       role: existing?.role,
+      activeSubagents: existing?.activeSubagents ?? [],
       ...patch,
     });
   }

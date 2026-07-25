@@ -57,7 +57,11 @@ export function buildDebugState(scene: Scene, runtimeLayout: RuntimeLayout): Deb
     rooms: f.floor.rooms.map((r) => r.id),
   }));
 
-  const pendingNotifications = characters.filter((c) => c.state === "waiting").length;
+  // M1-4b AC-5: OfficeState の waiting セッション数を唯一のソースとする（scene が
+  // syncFromOffice のたびに記録する）。RuntimeCharacter.state（walk/leave 中は本来の
+  // 状態が onArriveState に退避されている）に依存すると、visitor が受付へ歩いている
+  // 間だけ pendingNotifications が実際のセッション数と乖離する（歩行遅延ドリフト）。
+  const pendingNotifications = scene.getWaitingSessionCount();
 
   return { characters, floors, pendingNotifications, clock: scene.getClock() };
 }

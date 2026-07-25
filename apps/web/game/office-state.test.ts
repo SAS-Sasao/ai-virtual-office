@@ -285,6 +285,154 @@ describe("OfficeState.applyEvent attribution passthrough", () => {
   });
 });
 
+describe("OfficeState.activeSubagents (M1-4b AC-1)", () => {
+  it("starts every session with an empty activeSubagents array", () => {
+    const state = new OfficeState();
+    state.applyEvent(ev({ type: "session_start", sessionId: "s1", ts: 1000 }));
+
+    const session = state.getSnapshot().sessions.find((s) => s.sessionId === "s1");
+    expect(session?.activeSubagents).toEqual([]);
+  });
+
+  it("pre_tool with toolName Task pushes an entry carrying that event's own (subagent) attribution", () => {
+    const state = new OfficeState();
+    state.applyEvent(ev({ type: "session_start", sessionId: "s1", ts: 1000, org: "org-a", dept: "dept-parent", role: "parent-role" }));
+    state.applyEvent(
+      ev({
+        type: "pre_tool",
+        sessionId: "s1",
+        toolName: "Task",
+        subagentType: "researcher",
+        ts: 1100,
+        org: "org-a",
+        dept: "dept-child",
+        role: "child-role",
+      }),
+    );
+
+    const session = state.getSnapshot().sessions.find((s) => s.sessionId === "s1");
+    expect(session?.activeSubagents).toEqual([
+      { subagentType: "researcher", org: "org-a", dept: "dept-child", role: "child-role" },
+    ]);
+  });
+
+  it("a non-Task pre_tool does not push onto activeSubagents", () => {
+    const state = new OfficeState();
+    state.applyEvent(ev({ type: "session_start", sessionId: "s1", ts: 1000 }));
+    state.applyEvent(ev({ type: "pre_tool", sessionId: "s1", toolName: "Edit", ts: 1100 }));
+
+    const session = state.getSnapshot().sessions.find((s) => s.sessionId === "s1");
+    expect(session?.activeSubagents).toEqual([]);
+  });
+
+  it("subagent_stop pops the most recently pushed entry (LIFO)", () => {
+    const state = new OfficeState();
+    state.applyEvent(ev({ type: "session_start", sessionId: "s1", ts: 1000 }));
+    state.applyEvent(
+      ev({ type: "pre_tool", sessionId: "s1", toolName: "Task", subagentType: "a", ts: 1100, dept: "dept-a" }),
+    );
+    state.applyEvent(
+      ev({ type: "pre_tool", sessionId: "s1", toolName: "Task", subagentType: "b", ts: 1200, dept: "dept-b" }),
+    );
+
+    let session = state.getSnapshot().sessions.find((s) => s.sessionId === "s1");
+    expect(session?.activeSubagents).toHaveLength(2);
+
+    state.applyEvent(ev({ type: "subagent_stop", sessionId: "s1", ts: 1300 }));
+
+    session = state.getSnapshot().sessions.find((s) => s.sessionId === "s1");
+    // LIFO: 最後に push された b が先に pop される
+    expect(session?.activeSubagents).toEqual([{ subagentType: "a", org: undefined, dept: "dept-a", role: undefined }]);
+
+    state.applyEvent(ev({ type: "subagent_stop", sessionId: "s1", ts: 1400 }));
+
+    session = state.getSnapshot().sessions.find((s) => s.sessionId === "s1");
+    expect(session?.activeSubagents).toEqual([]);
+  });
+
+  it("subagent_stop on a session with no active subagents is a harmless no-op", () => {
+    const state = new OfficeState();
+    state.applyEvent(ev({ type: "session_start", sessionId: "s1", ts: 1000 }));
+    state.applyEvent(ev({ type: "subagent_stop", sessionId: "s1", ts: 1100 }));
+
+    const session = state.getSnapshot().sessions.find((s) => s.sessionId === "s1");
+    expect(session?.activeSubagents).toEqual([]);
+    expect(session?.state).toBe("done");
+  });
+});
+
+describe("OfficeState.applyEvent Task attribution protection (M1-4b AC-1 — regression)", () => {
+  // 現行バグの再現: Task の pre_tool/post_tool イベントは「呼び出した subagent 自身の
+  // 帰属」を運ぶ（規則 3）。既存の attributionPatch はイベントに乗っている org/dept/role
+  // を無条件に親セッションへ適用してしまうため、親の本来の帰属が subagent の帰属で
+  // 上書きされてしまう（設計メモ rev.3 の HIGH finding）。この 2 件は red で現行バグを
+  // 再現してから、Task イベントの帰属適用をスキップする修正で green にする。
+  it("pre_tool(Task) does not overwrite the parent session's org/dept/role", () => {
+    const state = new OfficeState();
+    state.applyEvent(
+      ev({ type: "session_start", sessionId: "s1", ts: 1000, org: "org-a", dept: "dept-parent", role: "parent-role" }),
+    );
+    state.applyEvent(
+      ev({
+        type: "pre_tool",
+        sessionId: "s1",
+        toolName: "Task",
+        subagentType: "researcher",
+        ts: 1100,
+        org: "org-a",
+        dept: "dept-child",
+        role: "child-role",
+      }),
+    );
+
+    const session = state.getSnapshot().sessions.find((s) => s.sessionId === "s1");
+    expect(session).toMatchObject({ org: "org-a", dept: "dept-parent", role: "parent-role" });
+  });
+
+  it("post_tool(Task) does not overwrite the parent session's org/dept/role", () => {
+    const state = new OfficeState();
+    state.applyEvent(
+      ev({ type: "session_start", sessionId: "s1", ts: 1000, org: "org-a", dept: "dept-parent", role: "parent-role" }),
+    );
+    state.applyEvent(
+      ev({
+        type: "pre_tool",
+        sessionId: "s1",
+        toolName: "Task",
+        subagentType: "researcher",
+        ts: 1100,
+        org: "org-a",
+        dept: "dept-child",
+        role: "child-role",
+      }),
+    );
+    state.applyEvent(
+      ev({
+        type: "post_tool",
+        sessionId: "s1",
+        toolName: "Task",
+        subagentType: "researcher",
+        ts: 1200,
+        org: "org-a",
+        dept: "dept-child",
+        role: "child-role",
+      }),
+    );
+
+    const session = state.getSnapshot().sessions.find((s) => s.sessionId === "s1");
+    expect(session).toMatchObject({ org: "org-a", dept: "dept-parent", role: "parent-role" });
+  });
+
+  it("a non-Task post_tool still applies attribution normally (no regression)", () => {
+    const state = new OfficeState();
+    state.applyEvent(ev({ type: "session_start", sessionId: "s1", ts: 1000, org: "org-a" }));
+    state.applyEvent(ev({ type: "post_tool", sessionId: "s1", toolName: "Edit", ts: 1100, org: "org-b" }));
+
+    const session = state.getSnapshot().sessions.find((s) => s.sessionId === "s1");
+    expect(session?.org).toBe("org-b");
+  });
+});
+
 describe("OfficeState.subscribe", () => {
   it("notifies subscribers when applyEvent changes state", () => {
     const state = new OfficeState();

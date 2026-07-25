@@ -5,8 +5,9 @@ export const metadata: Metadata = {
   title: "AI Virtual Office",
 };
 
-// デザイントークン（docs/design/ui/README.md 抽出仕様1）を body に inline style で最小適用する。
-// CSS ファイルは作らず、M0 はここでの直書きに留める。
+// デザイントークン（docs/design/ui/README.md 抽出仕様1: v3 ダークネイビー）を
+// body に inline style で最小適用する。CSS ファイルは作らず、直書きに留める
+// （M1-4b: v2 のウッド調 #141017/#efe6d6 は不採用となったため v3 へ移行）。
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ja">
@@ -14,8 +15,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         style={{
           margin: 0,
           minHeight: "100vh",
-          backgroundColor: "#141017",
-          color: "#efe6d6",
+          backgroundColor: "#0b0d18",
+          color: "#e8eaf6",
           fontFamily: "'DotGothic16', monospace",
         }}
       >

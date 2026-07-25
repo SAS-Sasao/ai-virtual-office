@@ -1,6 +1,8 @@
 - [TDD hook noise is expected](feedback_tdd_hook_noise.md) — typecheck-touched PostToolUse errors during red phase are noise, not a real failure, file is already written
 - [Task spec & report format](feedback_task_spec_and_report_format.md) — orchestrator specs are exhaustive/literal; report back with red/green evidence + typecheck result
 - [Ordering defense & tombstone (M1-2a)](project_ordering_defense_tombstone.md) — office-state.ts is now the sole owner of pipeline ordering guarantees; PRUNE_TIMEOUT_MS is shared with apps/web/db
-- [Scene claim/visitor design (M1-4a)](project_m1_4a_scene_claim_visitor_design.md) — ghost-duplicate bug+fix in scene.ts claim logic; subagent meeting-room routing deferred (office-state.ts lacks subagentType)
+- [Scene claim/visitor design (M1-4a)](project_m1_4a_scene_claim_visitor_design.md) — ghost-duplicate bug+fix in scene.ts claim logic; subagent routing gap resolved in M1-4b (see below)
+- [Subagent spawn + tile allocation (M1-4b)](project_m1_4b_subagent_spawn_and_tile_allocation.md) — activeSubagents LIFO, pre/post_tool(Task) attribution-overwrite fix, unified visitor/sub non-overlapping tile allocator, pendingNotifications sourced from OfficeState not RuntimeCharacter, test gotcha: unattributed parent sessions are also visitors
 - [Node test env has no DOM (feedback)](feedback_node_test_env_no_dom_di.md) — canvas/rAF/document must be injected in game/, never defaulted to a bare global reference call
 - [Connectivity interior-anchor fix (M1-4a Phase 3)](project_m1_4a_connectivity_interior_anchor.md) — door-reachable ≠ interior-reachable (corner-door bug); one-time approved exception to touch packages/cc-sier-adapter
+- [fastMode masks slow-mode bugs (feedback)](feedback_fastmode_masks_slowmode_bugs.md) — always add a fastMode:false regression test for multi-tick walk bugs; fast-mode's synchronous arrive() can make production-only bugs structurally untestable
