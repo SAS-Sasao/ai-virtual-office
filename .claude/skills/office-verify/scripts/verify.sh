@@ -128,10 +128,13 @@ else
   echo "[note] $relay_cli が未ビルドのため Relay ヘルスチェックを実施していない（build 未実行 or 未実装）"
 fi
 
-# --- Step 4 以降: 後続サイクルで実装 ------------------------------------------
-# TODO(M1-5): fixture イベントを注入する（POST /test/inject、fixtures/e2e/*.jsonl）
-# TODO(M1-5): Debug State API（window.__OFFICE_DEBUG__.getState()）で描画状態を assert する
-echo "[note] fixture 注入 / Debug State API assert は M1-5（E2E）で実装（未実装・合否対象外）"
+# --- E2E（@smoke）は verify.sh の予算に載せない -------------------------------
+# M1-5 で実装済み: fixture 注入（POST /test/inject、fixtures/e2e/*.jsonl）+ Debug
+# State API（window.__OFFICE_DEBUG__）による状態 assert は Playwright @smoke
+# （apps/web/e2e/*.spec.ts）が担う。実行は Stop hook の gate-e2e-smoke.sh（60 秒予算・
+# 専用ポート 3100/4105）+ CI で行い、verify.sh（build/typecheck/test の停止条件）とは
+# 予算を分ける（ブラウザ起動を verify.sh の毎回実行に載せない）。
+echo "[note] E2E @smoke は gate-e2e-smoke.sh / CI で実行（verify.sh の予算外・合否対象外）"
 
 if [[ "$fail" -ne 0 ]]; then
   echo "=== office-verify: FAIL ===" >&2

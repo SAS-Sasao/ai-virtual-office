@@ -1,0 +1,2 @@
+{"type":"session_start","sessionId":"e2e-inject-001","org":"default","ts":1737936000000,"seq":1}
+{"type":"pre_tool","sessionId":"e2e-inject-001","toolName":"Edit","fileBase":"example.ts","org":"default","ts":1737936000100,"seq":2}

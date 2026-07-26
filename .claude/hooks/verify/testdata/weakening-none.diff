@@ -1,0 +1,14 @@
+diff --git a/apps/web/game/example.test.ts b/apps/web/game/example.test.ts
+index 1111111..4444444 100644
+--- a/apps/web/game/example.test.ts
++++ b/apps/web/game/example.test.ts
+@@ -5,6 +5,11 @@ describe("example", () => {
+   it("checks", () => {
+     expect(a()).toBe(1);
++    expect(b()).toBe(2);
++    expect(c()).toBe(3);
+   });
++  it("new case", () => {
++    expect(d()).toBe(4);
++  });
+ });

@@ -92,6 +92,22 @@
             "command": ".claude/hooks/verify/gate-protocol-consumers.sh"
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/verify/gate-test-weakening.sh"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/verify/gate-e2e-smoke.sh"
+          }
+        ]
       }
     ],
     "SubagentStop": [

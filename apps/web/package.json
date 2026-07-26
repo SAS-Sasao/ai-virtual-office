@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start -p 3001",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e:smoke": "playwright test --grep @smoke",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@ai-office/protocol": "workspace:*",
@@ -19,6 +21,7 @@
     "zod": "^3.25.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",

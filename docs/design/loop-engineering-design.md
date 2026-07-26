@@ -5,7 +5,7 @@
 | 項目 | 内容 |
 |------|------|
 | ドキュメント種別 | 設計書（`.claude` 構成の詳細設計） |
-| バージョン | 0.3.0（§4.2 敵対的検証プロトコルを追加） |
+| バージョン | 0.3.1（M1-5 で §2.2 の gate-test-weakening / gate-e2e-smoke・§5 の @smoke 3 本 / e2e-authoring / CI・Phase 4 必須化を実装。§2.3 導入時期表と §6 M0→M1 を実装済みに追随） |
 | 作成日 | 2026-07-19 |
 | 対象リポジトリ | 【ai-virtual-office】(https://github.com/SAS-Sasao/ai-virtual-office) |
 | 上位ドキュメント | 【要件定義書 v0.2】(./requirements.md) §5.4 / 【設計ドキュメント】(./architecture-design.md) |
@@ -162,6 +162,8 @@ CLAUDE.md 規約「protocol 変更時は relay/web 両テスト」の機械化�
 | gate-protocol-consumers | protocol パッケージ初版と同時 | 対象が存在してから |
 | gate-test-weakening | E2E 初版と同時 | 同上 |
 | gate-e2e-smoke | M1（@smoke スイート成立後） | §5.2 |
+
+**導入状況（2026-07-26）**: guard-game-react / typecheck-touched / gate-protocol-consumers は導入済み。**gate-test-weakening / gate-e2e-smoke は M1-5 で実装し settings.json の Stop に結線済み**（@smoke 3 本 + e2e-authoring スキル + CI PR ゲートと同時。§6 M0→M1 の該当項目はすべて完了）。
 
 ---
 
