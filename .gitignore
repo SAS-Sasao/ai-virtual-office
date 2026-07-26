@@ -1,6 +1,11 @@
 node_modules/
 .next/
 .next-verify/
+.next-e2e/
+# Playwright（E2E ハーネス M1-5）の生成物と、next dev の tsconfig 書換え退避
+test-results/
+playwright-report/
+*.e2ebak
 settings.json.ai-office-backup-*
 dist/
 build/

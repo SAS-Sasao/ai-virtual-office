@@ -1,0 +1,10 @@
+diff --git a/apps/web/game/example.test.ts b/apps/web/game/example.test.ts
+index 1111111..2222222 100644
+--- a/apps/web/game/example.test.ts
++++ b/apps/web/game/example.test.ts
+@@ -3,7 +3,7 @@ describe("example", () => {
+-  it("does a thing", () => {
++  it.skip("does a thing", () => {
+     expect(f()).toBe(1);
+   });
+ });

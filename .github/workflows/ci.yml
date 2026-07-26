@@ -1,0 +1,56 @@
+name: CI
+
+# PR ゲート（設計書 §5.5 の PR 行 / M1-5 設計メモ「.github/workflows/」）。
+# auto-merge の前提となる必須チェック。クリーンチェックアウト（actions/checkout の
+# 都度クローン）で green になること＝残存 dist に依存しない（AC-12b）。
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.0.0
+
+      # 配布物の最低要件（CLAUDE.md: Node 20+）を CI の実行系で担保する
+      # （開発機が動くことは要件充足の証明にならない・office-develop ギャップ記録 2）。
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # トポロジカル build を先頭に置く（設計メモ rev.2 review finding・高）:
+      # @ai-office/protocol の exports は dist のみ。消費側（web/relay/cli）は dist
+      # 経由でしか protocol を解決できず、pnpm install は dist を作らないため、
+      # クリーンチェックアウトでは build を先に回さないと typecheck/test/e2e が全滅する。
+      - name: Build (topological)
+        run: pnpm -r build
+
+      - name: Typecheck
+        run: pnpm -r typecheck
+
+      - name: Unit tests
+        run: pnpm -r test
+
+      # E2E 用ブラウザ（chromium のみ）を system 依存込みで導入する（第 1 層・
+      # 状態 assert のため 1 ブラウザで足りる。視覚回帰の第 2 層は M2）。
+      - name: Install Playwright chromium
+        run: pnpm --filter web exec playwright install --with-deps chromium
+
+      - name: E2E smoke
+        run: pnpm --filter web e2e:smoke

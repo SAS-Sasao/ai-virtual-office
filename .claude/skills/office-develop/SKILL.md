@@ -50,9 +50,14 @@ office-qa を Task で起動し、機械検証（office-verify / 関連テスト
 
 ### Phase 4 E2E
 
-**現時点（M0）では E2E スイート未整備のため skip とする。skip した事実を PR 本文に必ず記録すること（silent skip 禁止）。M1 で必須化予定。**
+**M1 以降は必須**: `pnpm --filter web e2e:smoke`（@smoke）+ 変更に関係する spec を実行する。
 
-（M1 以降: @smoke + 関連 spec を実行。fail → 設計書 §5.3 ループ B の 3 分類で Phase 2 へ）
+- fail → 設計書 §5.3 ループ B の 3 分類（実装バグ / テスト脆弱 / 環境依存）で切り分け、Phase 2 へ戻す
+- spec の追加・修正は **e2e-authoring スキル**の規約（決定論・`?e2e=1`・`waitForIdle`・fixture シード・本番非破壊）に従う
+- Stop hook `gate-e2e-smoke`（apps/web 変更時のみ・chromium presence ガード付き）が @smoke を機械的に強制する
+- **chromium 未導入で実行不能な場合のみ** skip とし、skip の事実と理由を PR 本文に記録する（silent skip 禁止）
+
+（E2E スイート成立前の M0 に限り「skip 記録のみ」の運用だった。M1-5 で @smoke を新設して必須化した。）
 
 ### Phase 5 反映
 
@@ -68,5 +73,5 @@ office-qa を Task で起動し、機械検証（office-verify / 関連テスト
 | 1 | 設計レビュー | office-qa の verdict JSON | findings を添えて Phase 0（リトライ 1 回、2 回目は人間へ） |
 | 2 | 実装（TDD） | red → green のテスト + 実装 diff | — |
 | 3 | 実装レビュー | office-qa の verdict JSON | fix_suggestions を添えて Phase 2（リトライ 1 回、2 回目は人間へ） |
-| 4 | E2E | （M0: skip 記録のみ / M1: @smoke + 関連 spec の結果） | §5.3 ループ B の 3 分類で Phase 2 |
+| 4 | E2E | @smoke（`pnpm --filter web e2e:smoke`）+ 関連 spec の結果（M0 に限り skip 記録のみ） | §5.3 ループ B の 3 分類で Phase 2 |
 | 5 | 反映 | PR（verdict JSON + Phase 4 記録を本文に記載）+ auto-merge | — |
