@@ -565,3 +565,277 @@ describe("startRenderer: sprite source selection (M2-1 AC-4/AC-9)", () => {
     handle.stop();
   });
 });
+
+// ---------------------------------------------------------------------------
+// M2-2: 部屋 backdrop の汎用レイヤー（floor.backdrop PNG を z0 に敷く）
+// ---------------------------------------------------------------------------
+
+/** floor.backdrop の drawImage/fillRect/fillText を記録する offscreen canvas ファクトリ。 */
+interface RecordingFloorCanvas extends DrawableCanvas {
+  drawImageCalls: unknown[][];
+  fillRectCalls: Array<{ fillStyle: unknown; x: number; y: number; w: number; h: number }>;
+  fillTextCalls: Array<{ text: string; x: number; y: number }>;
+}
+
+function createRecordingCanvasFactory(): { factory: CanvasFactory; created: RecordingFloorCanvas[] } {
+  const created: RecordingFloorCanvas[] = [];
+  const factory: CanvasFactory = (width, height) => {
+    const drawImageCalls: unknown[][] = [];
+    const fillRectCalls: Array<{ fillStyle: unknown; x: number; y: number; w: number; h: number }> = [];
+    const fillTextCalls: Array<{ text: string; x: number; y: number }> = [];
+    const ctx = {
+      fillStyle: "#000000",
+      strokeStyle: "#000000",
+      lineWidth: 1,
+      globalAlpha: 1,
+      font: "10px monospace",
+      textAlign: "left" as CanvasTextAlign,
+      fillRect: (x: number, y: number, w: number, h: number) => {
+        fillRectCalls.push({ fillStyle: ctx.fillStyle, x, y, w, h });
+      },
+      strokeRect: () => {},
+      fillText: (text: string, x: number, y: number) => {
+        fillTextCalls.push({ text, x, y });
+      },
+      drawImage: (...args: unknown[]) => {
+        drawImageCalls.push(args);
+      },
+      save: () => {},
+      restore: () => {},
+      translate: () => {},
+      beginPath: () => {},
+      moveTo: () => {},
+      lineTo: () => {},
+      stroke: () => {},
+    };
+    const canvas = {
+      width,
+      height,
+      getContext: (kind: string) => (kind === "2d" ? (ctx as unknown as CanvasRenderingContext2D) : null),
+      drawImageCalls,
+      fillRectCalls,
+      fillTextCalls,
+    } as unknown as RecordingFloorCanvas;
+    created.push(canvas);
+    return canvas;
+  };
+  return { factory, created };
+}
+
+/** src を受け取り解決/棄却を手動制御できる backdrop ローダ（sleep 禁止・決定論・呼び出し回数と src を記録）。 */
+function createControllableBackdropLoader(image: SpriteSourceImage) {
+  let resolveFn: (image: SpriteSourceImage) => void = () => {};
+  let rejectFn: (reason: unknown) => void = () => {};
+  const state = { calls: 0, srcs: [] as string[] };
+  let promise: Promise<SpriteSourceImage> = Promise.resolve(image);
+  const loader = (src: string) => {
+    state.calls += 1;
+    state.srcs.push(src);
+    promise = new Promise<SpriteSourceImage>((res, rej) => {
+      resolveFn = res;
+      rejectFn = rej;
+    });
+    return promise;
+  };
+  return {
+    loader,
+    state,
+    resolve: () => {
+      resolveFn(image);
+      return promise;
+    },
+    reject: () => {
+      rejectFn(new Error("backdrop load failed"));
+      return promise;
+    },
+  };
+}
+
+describe("startRenderer: floor backdrop layer (M2-2 AC-1/2/4/5/11)", () => {
+  const BACKDROP_IMAGE: SpriteSourceImage = { width: 1672, height: 941 };
+  const BACKDROP_SRC = "/assets/backdrops/office.png";
+  const FLOOR_W = REAL_SHAPE_FLOOR.grid.cols * REAL_SHAPE_FLOOR.grid.tileSize; // 960
+  const FLOOR_H = REAL_SHAPE_FLOOR.grid.rows * REAL_SHAPE_FLOOR.grid.tileSize; // 448
+  const DESK_COLOR = "#20304a"; // renderer.ts の DESK_COLOR（家具デスクの塗り色）
+
+  /** backdrop を明示設定したフロアで scene を組む（キャラ 0 体 = 生成物は floor レイヤーのみ）。 */
+  function buildBackdropScene(backdrop = BACKDROP_SRC, floors = [REAL_SHAPE_FLOOR]) {
+    const withBackdrop = floors.map((f) => ({ ...f, backdrop }));
+    const runtimeLayout = buildRuntimeLayout({ version: 1, floors: withBackdrop }, []);
+    const officeState = new OfficeState();
+    const scene = new Scene(runtimeLayout, [], officeState, { fastMode: true });
+    return { runtimeLayout, scene };
+  }
+
+  function floorCanvases(created: RecordingFloorCanvas[]): RecordingFloorCanvas[] {
+    return created.filter((c) => isFloorLayerCanvas(c));
+  }
+
+  it("draws the backdrop as drawImage(bg, 0, 0, width, height) on z0 once the loader resolves (AC-1)", async () => {
+    const { runtimeLayout, scene } = buildBackdropScene();
+    const { factory, created } = createRecordingCanvasFactory();
+    const { canvas } = createMainCanvasStub();
+    const raf = createManualRaf();
+    const ctl = createControllableBackdropLoader(BACKDROP_IMAGE);
+
+    const handle = startRenderer(canvas, scene, runtimeLayout, {
+      canvasFactory: factory,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      backdropImageLoader: ctl.loader,
+    });
+
+    raf.pump(0); // ロード前: 単色 z0
+    await ctl.resolve(); // 解決 → cache 無効化
+    raf.pump(16); // ロード後: backdrop 付きに再構築
+
+    const floors = floorCanvases(created);
+    const rebuilt = floors[floors.length - 1];
+    const bgBlit = rebuilt.drawImageCalls.find(
+      (a) => a.length === 5 && a[0] === BACKDROP_IMAGE && a[1] === 0 && a[2] === 0 && a[3] === FLOOR_W && a[4] === FLOOR_H,
+    );
+    expect(bgBlit).toBeDefined();
+
+    handle.stop();
+  });
+
+  it("skips z2 desks and keeps z1 name plates when the backdrop is present; keeps desks otherwise (AC-2)", async () => {
+    const { runtimeLayout, scene } = buildBackdropScene();
+    const { factory, created } = createRecordingCanvasFactory();
+    const { canvas } = createMainCanvasStub();
+    const raf = createManualRaf();
+    const ctl = createControllableBackdropLoader(BACKDROP_IMAGE);
+
+    const handle = startRenderer(canvas, scene, runtimeLayout, {
+      canvasFactory: factory,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      backdropImageLoader: ctl.loader,
+    });
+
+    raf.pump(0); // backdrop 未ロード = 従来どおり（単色 z0 + 家具）
+    const beforeFloor = floorCanvases(created)[0];
+    // fixture は 3 desk → デスク塗り 3 件
+    expect(beforeFloor.fillRectCalls.filter((c) => c.fillStyle === DESK_COLOR)).toHaveLength(3);
+
+    await ctl.resolve();
+    raf.pump(16); // backdrop あり = 家具スキップ・名前プレート維持
+
+    const afterFloors = floorCanvases(created);
+    const rebuilt = afterFloors[afterFloors.length - 1];
+    // z2 家具（デスク）を描かない
+    expect(rebuilt.fillRectCalls.filter((c) => c.fillStyle === DESK_COLOR)).toHaveLength(0);
+    // z1 名前プレート（部屋名）は残す
+    expect(rebuilt.fillTextCalls.some((c) => c.text === "技術リサーチ室")).toBe(true);
+
+    handle.stop();
+  });
+
+  it("invalidates the floor layer cache and rebuilds with the backdrop when the loader resolves (AC-4)", async () => {
+    const { runtimeLayout, scene } = buildBackdropScene();
+    const { factory, created } = createRecordingCanvasFactory();
+    const { canvas } = createMainCanvasStub();
+    const raf = createManualRaf();
+    const ctl = createControllableBackdropLoader(BACKDROP_IMAGE);
+
+    const handle = startRenderer(canvas, scene, runtimeLayout, {
+      canvasFactory: factory,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      backdropImageLoader: ctl.loader,
+    });
+
+    raf.pump(0);
+    expect(floorCanvases(created)).toHaveLength(1); // 初回構築（単色）
+
+    await ctl.resolve(); // cache 無効化
+    raf.pump(16); // 再構築（backdrop 付き）
+    expect(floorCanvases(created)).toHaveLength(2);
+
+    raf.pump(32); // 以降は cache ヒット（再構築しない）
+    expect(floorCanvases(created)).toHaveLength(2);
+
+    const rebuilt = floorCanvases(created)[1];
+    expect(rebuilt.drawImageCalls.some((a) => a.length === 5 && a[0] === BACKDROP_IMAGE)).toBe(true);
+
+    handle.stop();
+  });
+
+  it("stays on the solid z0 and does not retry when the loader rejects (AC-5)", async () => {
+    const { runtimeLayout, scene } = buildBackdropScene();
+    const { factory, created } = createRecordingCanvasFactory();
+    const { canvas } = createMainCanvasStub();
+    const raf = createManualRaf();
+    const ctl = createControllableBackdropLoader(BACKDROP_IMAGE);
+
+    const handle = startRenderer(canvas, scene, runtimeLayout, {
+      canvasFactory: factory,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      backdropImageLoader: ctl.loader,
+    });
+
+    raf.pump(0);
+    await ctl.reject().catch(() => {});
+    raf.pump(16);
+    raf.pump(32);
+
+    const floors = floorCanvases(created);
+    // reject → cache 無効化しない = 再構築されず、backdrop の drawImage も無い
+    expect(floors).toHaveLength(1);
+    expect(floors[0].drawImageCalls.some((a) => a.length === 5 && a[0] === BACKDROP_IMAGE)).toBe(false);
+    // ローダは 1 回だけ（再試行しない）
+    expect(ctl.state.calls).toBe(1);
+
+    handle.stop();
+  });
+
+  it("loads each backdrop src exactly once even when multiple floors share it (AC-11)", () => {
+    const { runtimeLayout, scene } = buildBackdropScene(BACKDROP_SRC, [
+      REAL_SHAPE_FLOOR,
+      { ...REAL_SHAPE_FLOOR, org: "jutaku-dev-team" },
+    ]);
+    const { factory } = createRecordingCanvasFactory();
+    const { canvas } = createMainCanvasStub();
+    const raf = createManualRaf();
+    const ctl = createControllableBackdropLoader(BACKDROP_IMAGE);
+
+    const handle = startRenderer(canvas, scene, runtimeLayout, {
+      canvasFactory: factory,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      backdropImageLoader: ctl.loader,
+    });
+
+    raf.pump(0);
+    // 2 フロアが同一 src を共有 → src ごとに 1 回だけロード（F2 dedupe）
+    expect(ctl.state.calls).toBe(1);
+    expect(ctl.state.srcs).toEqual([BACKDROP_SRC]);
+
+    handle.stop();
+  });
+
+  it("uses the solid z0 (no backdrop) when no backdropImageLoader is injected (AC-3 opt-in)", () => {
+    const { runtimeLayout, scene } = buildBackdropScene();
+    const { factory, created } = createRecordingCanvasFactory();
+    const { canvas } = createMainCanvasStub();
+    const raf = createManualRaf();
+
+    const handle = startRenderer(canvas, scene, runtimeLayout, {
+      canvasFactory: factory,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      // backdropImageLoader を渡さない
+    });
+
+    raf.pump(0);
+    raf.pump(16);
+
+    const floor = floorCanvases(created)[0];
+    // 未注入 = backdrop の drawImage 無し・家具は描かれる（単色 z0 の従来経路）
+    expect(floor.drawImageCalls.some((a) => a.length === 5 && a[0] === BACKDROP_IMAGE)).toBe(false);
+    expect(floor.fillRectCalls.filter((c) => c.fillStyle === DESK_COLOR)).toHaveLength(3);
+
+    handle.stop();
+  });
+});
