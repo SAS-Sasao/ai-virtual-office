@@ -1,10 +1,13 @@
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { OfficeEvent } from "@ai-office/protocol";
 import { OfficeState } from "./office-state";
 import { buildRuntimeLayout } from "./layout-runtime";
 import { Scene } from "./scene";
-import { startRenderer } from "./renderer";
-import type { CanvasFactory, DrawableCanvas } from "./sprites";
+import { cellFor, startRenderer } from "./renderer";
+import type { CanvasFactory, DrawableCanvas, SpriteSourceImage } from "./sprites";
 import { REAL_SHAPE_CHARACTERS, REAL_SHAPE_FLOOR } from "./fixtures/real-layout-fixture";
 
 /** 第 2 フロア（別 org）。z0〜z2 のフロア別キャッシュ検証に使う。 */
@@ -393,6 +396,172 @@ describe("startRenderer: focus ring / sub label / hover card (M1-4b AC-4/AC-6)",
 
     expect(strokeRectCalls.filter((c) => c.w === 168)).toHaveLength(0);
 
+    handle.stop();
+  });
+});
+
+describe("cellFor (M2-1 AC-3): every roster role/dept maps to a valid sheet cell", () => {
+  const SW = 384;
+  const SH = 512;
+  // AC-3 で列挙された 8 dept（col 0-3 x row 0-1 の 8 セルへ決定的に割当）。
+  const ENUMERATED_DEPTS = [
+    "dept-architecture",
+    "dept-development",
+    "dept-infra",
+    "dept-pm",
+    "dept-quality",
+    "dept-research",
+    "dept-retail-domain",
+    "dept-secretary",
+  ];
+
+  function assertValidCell(role: string, dept: string): void {
+    const cell = cellFor(role, dept);
+    expect(cell.sw).toBe(SW);
+    expect(cell.sh).toBe(SH);
+    const col = cell.sx / SW;
+    const row = cell.sy / SH;
+    expect(Number.isInteger(col)).toBe(true);
+    expect(Number.isInteger(row)).toBe(true);
+    expect(col).toBeGreaterThanOrEqual(0);
+    expect(col).toBeLessThanOrEqual(3);
+    expect(row).toBeGreaterThanOrEqual(0);
+    expect(row).toBeLessThanOrEqual(1);
+  }
+
+  it("maps all enumerated depts to col 0-3 / row 0-1", () => {
+    for (const dept of ENUMERATED_DEPTS) assertValidCell("any-role", dept);
+  });
+
+  it("falls back to a valid cell for unknown/empty dept and role (default = engineer)", () => {
+    assertValidCell("mystery-role", "dept-does-not-exist");
+    assertValidCell("", "");
+  });
+
+  it("is deterministic (same input → same output)", () => {
+    expect(cellFor("lead-developer", "dept-development")).toEqual(cellFor("lead-developer", "dept-development"));
+    // dept-research と dept-retail-domain は同一セルを共有する（制服的表現・決定的）
+    expect(cellFor("tech-researcher", "dept-research")).toEqual(cellFor("retail-domain-researcher", "dept-retail-domain"));
+  });
+
+  it("maps every real ~/.ai-office roster role/dept (or the enumerated depts) to a valid cell", () => {
+    // 実生成ロースタがある環境ではそれを全数反復する。無い環境（クリーンチェックアウト
+    // 等）では AC-3 列挙 8 dept を反復する（どちらでも非空・全数 assert = 取りこぼしゼロ）。
+    const rosterPath = join(homedir(), ".ai-office", "layouts", "characters.json");
+    const entries: Array<{ role: string; dept: string }> = existsSync(rosterPath)
+      ? (JSON.parse(readFileSync(rosterPath, "utf8")) as Array<{ role: string; dept: string }>)
+      : ENUMERATED_DEPTS.map((dept) => ({ role: "roster-role", dept }));
+    expect(entries.length).toBeGreaterThan(0);
+    for (const { role, dept } of entries) assertValidCell(role, dept);
+  });
+});
+
+describe("startRenderer: sprite source selection (M2-1 AC-4/AC-9)", () => {
+  // 注入するスタブ画像（PNG 経路で使われたことを drawImage の source 同一性で判定する）。
+  const OFFICE_IMAGE: SpriteSourceImage = { width: 1536, height: 1024 };
+
+  /** 解決/棄却を手動制御できるローダ（sleep 禁止・決定論。ロード呼び出し回数も数える）。 */
+  function createControllableLoader() {
+    let resolveFn: (image: SpriteSourceImage) => void = () => {};
+    let rejectFn: (reason: unknown) => void = () => {};
+    const state = { calls: 0 };
+    let promise: Promise<SpriteSourceImage> = Promise.resolve(OFFICE_IMAGE);
+    const loader = () => {
+      state.calls += 1;
+      promise = new Promise<SpriteSourceImage>((res, rej) => {
+        resolveFn = res;
+        rejectFn = rej;
+      });
+      return promise;
+    };
+    return {
+      loader,
+      state,
+      resolve: () => {
+        resolveFn(OFFICE_IMAGE);
+        return promise;
+      },
+      reject: () => {
+        rejectFn(new Error("load failed"));
+        return promise;
+      },
+    };
+  }
+
+  /** スプライトの draw は drawImage を 9 引数で呼ぶ（フロアレイヤーの blit は 3 引数）。 */
+  function spriteDrawCalls(drawImageCalls: unknown[][]): unknown[][] {
+    return drawImageCalls.filter((args) => args.length === 9);
+  }
+
+  function startWithLoader(loader: ((...a: never[]) => Promise<SpriteSourceImage>) | undefined) {
+    const { runtimeLayout, scene } = buildTestSceneWithRoster();
+    const { factory, created } = createStubCanvasFactory();
+    const { canvas, drawImageCalls } = createMainCanvasStub();
+    const raf = createManualRaf();
+    const handle = startRenderer(canvas, scene, runtimeLayout, {
+      canvasFactory: factory,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      spriteImageLoader: loader,
+    });
+    return { handle, raf, drawImageCalls, created };
+  }
+
+  it("uses generated sprites (not the PNG) when no loader is injected (AC-4)", () => {
+    const { handle, raf, drawImageCalls } = startWithLoader(undefined);
+    raf.pump(0);
+    const sprites = spriteDrawCalls(drawImageCalls);
+    expect(sprites.length).toBeGreaterThan(0);
+    expect(sprites.every((args) => args[0] !== OFFICE_IMAGE)).toBe(true);
+    handle.stop();
+  });
+
+  it("uses generated sprites while the injected loader is still unresolved (AC-4)", () => {
+    const ctl = createControllableLoader();
+    const { handle, raf, drawImageCalls } = startWithLoader(ctl.loader);
+    raf.pump(0);
+    const sprites = spriteDrawCalls(drawImageCalls);
+    expect(sprites.length).toBeGreaterThan(0);
+    expect(sprites.every((args) => args[0] !== OFFICE_IMAGE)).toBe(true);
+    handle.stop();
+  });
+
+  it("switches to PNG sprites after the loader resolves (AC-4)", async () => {
+    const ctl = createControllableLoader();
+    const { handle, raf, drawImageCalls } = startWithLoader(ctl.loader);
+    raf.pump(0); // ロード前: generated
+    await ctl.resolve(); // renderer の .then（officeImage 設定 + cache クリア）を反映
+    raf.pump(16); // ロード後: PNG
+    const sprites = spriteDrawCalls(drawImageCalls);
+    expect(sprites.some((args) => args[0] === OFFICE_IMAGE)).toBe(true);
+    handle.stop();
+  });
+
+  it("stays on generated sprites when the loader rejects (no retry) (AC-4)", async () => {
+    const ctl = createControllableLoader();
+    const { handle, raf, drawImageCalls } = startWithLoader(ctl.loader);
+    raf.pump(0);
+    await ctl.reject().catch(() => {});
+    raf.pump(16);
+    const sprites = spriteDrawCalls(drawImageCalls);
+    expect(sprites.length).toBeGreaterThan(0);
+    expect(sprites.every((args) => args[0] !== OFFICE_IMAGE)).toBe(true);
+    handle.stop();
+  });
+
+  it("calls the image loader exactly once and does not rebuild sheets every frame (AC-9)", async () => {
+    const ctl = createControllableLoader();
+    const { handle, raf, created } = startWithLoader(ctl.loader);
+    raf.pump(0);
+    await ctl.resolve(); // cache を 1 回クリア
+    const createdAfterResolve = created.length;
+    raf.pump(16); // PNG シートを再構築（loadSpriteSheetFromImage は canvasFactory を使わない）
+    raf.pump(32); // 以降は cache ヒット
+    raf.pump(48);
+    // ローダは 1 回だけ呼ばれる
+    expect(ctl.state.calls).toBe(1);
+    // PNG シートは canvasFactory を使わない = ロード後は新規 canvas が増えない（毎フレーム再構築していない）
+    expect(created.length).toBe(createdAfterResolve);
     handle.stop();
   });
 });

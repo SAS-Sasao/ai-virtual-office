@@ -52,6 +52,55 @@ export interface SpriteSheet {
   ): void;
 }
 
+/**
+ * `drawImage` のソースに使える最小の構造的インターフェース（ADR-005 の PNG シート実装）。
+ * HTMLImageElement / ImageBitmap 等の `CanvasImageSource` と、node テスト用スタブの
+ * 両方を受け入れる。**sprites.ts は `new Image()`/DOM を要求しない**（renderer/OfficeView
+ * 側が実画像を注入する）ため、この層は Node 環境で単体テスト可能に保たれる（AC-7）。
+ */
+export interface SpriteSourceImage {
+  readonly width: number;
+  readonly height: number;
+}
+
+/** スプライトシート内の 1 キャラ分のソース矩形（px）。 */
+export interface SpriteCell {
+  sx: number;
+  sy: number;
+  sw: number;
+  sh: number;
+}
+
+/**
+ * 注入された 1 枚のスプライトシート画像から、`cell` 矩形を 1 キャラとして描く
+ * `SpriteSheet` を返す（ADR-005・M2-1）。いただいた素材は単一の正面ポーズのみで
+ * 歩行フレームが無いため、**pose は無視**し、`direction==='left'` のときだけ
+ * `save()`+`translate()`+`scale(-1,1)` で水平反転して blit する（他方向は素の
+ * `drawImage`）。生成コスト（`createGeneratedSpriteSheet` のようなアトラス焼き込み）は
+ * 無く、毎回の `draw` は 1 回の `drawImage`（left は反転付き）で済む。
+ */
+export function loadSpriteSheetFromImage(image: SpriteSourceImage, cell: SpriteCell): SpriteSheet {
+  const { sx, sy, sw, sh } = cell;
+  const source = image as unknown as CanvasImageSource;
+  return {
+    frameWidth: sw,
+    frameHeight: sh,
+    draw(ctx, direction, pose, dx, dy, size) {
+      void pose; // 単一ポーズ素材のため pose は無視する（ADR-005 の割り切り）
+      const height = size * (sh / sw);
+      if (direction === "left") {
+        ctx.save();
+        ctx.translate(dx + size, dy);
+        ctx.scale(-1, 1);
+        ctx.drawImage(source, sx, sy, sw, sh, 0, 0, size, height);
+        ctx.restore();
+        return;
+      }
+      ctx.drawImage(source, sx, sy, sw, sh, dx, dy, size, height);
+    },
+  };
+}
+
 // 10x14 ドットの正面向き立ち姿（docs/design/ui/ai-virtual-office.dc.html v2 の
 // `sprite()` メソッド内 `base` 配列を移植。1 文字 = 1 ピクセル、'.' は透明）。
 const BASE_PIXEL_MAP: readonly string[] = [
