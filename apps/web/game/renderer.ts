@@ -4,12 +4,15 @@ import type { HoveredCharacterDetail, RuntimeCharacter } from "./scene";
 import { Scene } from "./scene";
 import {
   createGeneratedSpriteSheet,
+  loadSpriteSheetFromImage,
   type CanvasFactory,
   type CharacterPalette,
   type DrawableCanvas,
+  type SpriteCell,
   type SpriteDirection,
   type SpritePose,
   type SpriteSheet,
+  type SpriteSourceImage,
 } from "./sprites";
 
 // Canvas 2D レンダラー（M1-4a 全面改修）。
@@ -27,11 +30,25 @@ import {
 // requestAnimationFrame/cancelAnimationFrame はすべて呼び出し側から注入する
 // （node テストは描画呼び出し記録スタブ + 手動 raf ポンプを使う）。
 
+/**
+ * キャラクタースプライトシート画像（ADR-005 のオフィス PNG）を **非同期に 1 回**
+ * 返す注入関数。**opt-in**（未注入なら生成スプライトのまま）。本番は OfficeView が
+ * `new Image()` で `/assets/characters/office.png` をロードする関数を渡す。
+ * game/ 層に `new Image()`/DOM を持ち込まないための境界（React 非依存維持・NFR-7）。
+ */
+export type SpriteImageLoader = () => Promise<SpriteSourceImage>;
+
 export interface RendererDeps {
   /** z1/z2 のフロアレイヤー・z3 のスプライトアトラス生成に使う offscreen canvas ファクトリ。 */
   canvasFactory: CanvasFactory;
   requestAnimationFrame?: (callback: (time: number) => void) => number;
   cancelAnimationFrame?: (handle: number) => void;
+  /**
+   * 任意。渡されたときだけ PNG スプライトシートを試行する（ADR-005・M2-1）。
+   * 未注入時は既存どおり `createGeneratedSpriteSheet` を使う（既存 renderer テストは
+   * ローダを渡さないため node 環境で `new Image()` を叩かず無回帰・AC-4b）。
+   */
+  spriteImageLoader?: SpriteImageLoader;
 }
 
 export interface RendererHandle {
@@ -100,6 +117,39 @@ function paletteForCharacterId(id: string): CharacterPalette {
     body: BODY_COLORS[hash % BODY_COLORS.length],
     hair: HAIR_COLORS[Math.floor(hash / BODY_COLORS.length) % HAIR_COLORS.length],
   };
+}
+
+// ADR-005: オフィス PNG シート（1536x1024・4 列 x 2 行 = 1 セル 384x512）。
+const SHEET_CELL_W = 384;
+const SHEET_CELL_H = 512;
+// 8 セル（col 0-3 x row 0-1）を線形 index 0-7 で扱う。col = index % 4 / row = floor(index / 4)。
+const SHEET_COLS = 4;
+
+// dept 起点の決定的セル割当（8 セル < 15 ロールのため複数ロールがセルを共有する。
+// 決定的であればよい＝制服的表現）。未登録 dept は既定 = engineer(0) にフォールバックする。
+const DEPT_CELL_INDEX: Record<string, number> = {
+  "dept-development": 0, // engineer
+  "dept-pm": 1, // coordinator
+  "dept-architecture": 2, // devops-monitor
+  "dept-quality": 3, // analyst
+  "dept-infra": 4, // security
+  "dept-research": 5, // researcher（虫眼鏡）
+  "dept-retail-domain": 5, // researcher（dept-research と共有）
+  "dept-secretary": 6, // reception（chat）
+};
+const DEFAULT_CELL_INDEX = 0; // engineer
+
+/**
+ * ロール/部署から PNG シート内のソース矩形を決定的に返す（ADR-005・M2-1・AC-3）。
+ * 割当は dept 起点で、未登録 dept は engineer(0) にフォールバックするため
+ * **全ロースタが有効セル（col 0-3・row 0-1）に落ちる**（取りこぼしゼロ）。
+ */
+export function cellFor(role: string, dept: string): SpriteCell {
+  void role; // 現サイクルは dept 起点の割当（role はシグネチャの拡張余地として受ける）
+  const index = dept in DEPT_CELL_INDEX ? DEPT_CELL_INDEX[dept] : DEFAULT_CELL_INDEX;
+  const col = index % SHEET_COLS;
+  const row = Math.floor(index / SHEET_COLS);
+  return { sx: col * SHEET_CELL_W, sy: row * SHEET_CELL_H, sw: SHEET_CELL_W, sh: SHEET_CELL_H };
 }
 
 function poseFor(character: RuntimeCharacter, now: number, fastMode: boolean): SpritePose {
@@ -190,6 +240,24 @@ export function startRenderer(
   let rafId: number | undefined;
   let stopped = false;
 
+  // ADR-005: PNG スプライトシート。ローダが注入されたときだけ 1 回ロードを試みる。
+  // ロード完了で spriteCache を一度だけクリアし、次フレームから PNG に差し替える
+  // （初回の generated→PNG の一瞬の差し替えは割り切り済み）。reject は generated
+  // 据え置きで再試行しない（ローダは 1 回しか呼ばない）。
+  let officeSpriteImage: SpriteSourceImage | undefined;
+  if (deps.spriteImageLoader) {
+    deps
+      .spriteImageLoader()
+      .then((image) => {
+        if (stopped) return;
+        officeSpriteImage = image;
+        spriteCache.clear();
+      })
+      .catch(() => {
+        // ロード失敗時は generated のまま（officeSpriteImage は undefined を維持）。
+      });
+  }
+
   const findFloor = (org: string | undefined): RuntimeFloor | undefined =>
     runtimeLayout.floors.find((f) => f.floor.org === org);
 
@@ -207,7 +275,12 @@ export function startRenderer(
   const getOrBuildSpriteSheet = (character: RuntimeCharacter): SpriteSheet => {
     const cached = spriteCache.get(character.id);
     if (cached) return cached;
-    const sheet = createGeneratedSpriteSheet(paletteForCharacterId(character.id), deps.canvasFactory);
+    // ローダ注入済み かつ シート画像ロード済み → PNG（cellFor は全数マップ）。
+    // それ以外（未注入・未ロード・ロード失敗）→ 生成スプライトにフォールバック。
+    const sheet =
+      deps.spriteImageLoader && officeSpriteImage
+        ? loadSpriteSheetFromImage(officeSpriteImage, cellFor(character.role, character.dept))
+        : createGeneratedSpriteSheet(paletteForCharacterId(character.id), deps.canvasFactory);
     spriteCache.set(character.id, sheet);
     return sheet;
   };
