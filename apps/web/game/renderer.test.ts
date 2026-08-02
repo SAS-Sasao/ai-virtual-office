@@ -839,7 +839,7 @@ describe("startRenderer: floor backdrop layer (M2-2 AC-1/2/4/5/11)", () => {
     return created.filter((c) => isFloorLayerCanvas(c));
   }
 
-  it("draws the backdrop as drawImage(bg, 0, 0, width, height) on z0 once the loader resolves (AC-1)", async () => {
+  it("draws the backdrop contain-fit (aspect-preserved, centered) on z0 once the loader resolves (AC-1)", async () => {
     const { runtimeLayout, scene } = buildBackdropScene();
     const { factory, created } = createRecordingCanvasFactory();
     const { canvas } = createMainCanvasStub();
@@ -857,12 +857,23 @@ describe("startRenderer: floor backdrop layer (M2-2 AC-1/2/4/5/11)", () => {
     await ctl.resolve(); // 解決 → cache 無効化
     raf.pump(16); // ロード後: backdrop 付きに再構築
 
+    // contain-fit: アスペクト比を保って全体が収まる縮小 + 中央寄せ（歪ませない）。
+    const scale = Math.min(FLOOR_W / BACKDROP_IMAGE.width, FLOOR_H / BACKDROP_IMAGE.height);
+    const dw = BACKDROP_IMAGE.width * scale;
+    const dh = BACKDROP_IMAGE.height * scale;
+    const dx = (FLOOR_W - dw) / 2;
+    const dy = (FLOOR_H - dh) / 2;
+
     const floors = floorCanvases(created);
     const rebuilt = floors[floors.length - 1];
     const bgBlit = rebuilt.drawImageCalls.find(
-      (a) => a.length === 5 && a[0] === BACKDROP_IMAGE && a[1] === 0 && a[2] === 0 && a[3] === FLOOR_W && a[4] === FLOOR_H,
+      (a) => a.length === 5 && a[0] === BACKDROP_IMAGE && a[1] === dx && a[2] === dy && a[3] === dw && a[4] === dh,
     );
     expect(bgBlit).toBeDefined();
+    // 歪みゼロ（縦横同一 scale）かつ全体がキャンバス内に収まる（見切れない）。
+    expect(dw).toBeLessThanOrEqual(FLOOR_W);
+    expect(dh).toBeLessThanOrEqual(FLOOR_H);
+    expect(dw / dh).toBeCloseTo(BACKDROP_IMAGE.width / BACKDROP_IMAGE.height, 5);
 
     handle.stop();
   });
