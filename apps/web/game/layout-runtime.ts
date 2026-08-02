@@ -19,9 +19,22 @@ export const RECEPTION_DEPT_ID = "dept-secretary";
  * `floor.backdrop` 未設定フロアへ実行時に適用する既定の一枚絵背景（M2-2・ADR-006）。
  * 現状の生成レイアウト（`~/.ai-office/layouts`）は backdrop 未設定なため、これを
  * 既定として当てることで再インポートなしに全フロアで backdrop 機構を可視化できる。
- * 全 org がオフィス系のため既定 1 枚で妥当（per-org backdrop は follow-up）。
  */
 export const DEFAULT_BACKDROP = "/assets/backdrops/office.png";
+
+/**
+ * org ごとの部屋 backdrop テーマ（M2-2 拡張・ADR-006）。キャラの `ORG_THEME`
+ * （renderer.ts）と揃える: RPG テーマの org はファンタジー部屋、他はオフィス部屋。
+ * 未登録 org は `DEFAULT_BACKDROP`（オフィス）にフォールバックする。
+ */
+const BACKDROP_BY_ORG: Record<string, string> = {
+  "jutaku-dev-team": "/assets/backdrops/fantasy.png",
+};
+
+/** org からその部屋 backdrop パスを返す（未登録は既定オフィス背景）。 */
+export function backdropForOrg(org: string): string {
+  return BACKDROP_BY_ORG[org] ?? DEFAULT_BACKDROP;
+}
 
 export interface RuntimeFloor {
   readonly floor: Floor;
@@ -189,7 +202,7 @@ export function buildRuntimeLayout(layout: OfficeLayout | null, characters: read
     // 入力 floor を破壊変更せず spread のコピー側にだけ backdrop を載せる（純関数維持）。
     // 既に backdrop を持つフロアはその値を尊重する。
     floors: effectiveLayout.floors.map((floor) =>
-      buildRuntimeFloor({ ...floor, backdrop: floor.backdrop ?? DEFAULT_BACKDROP }, characters),
+      buildRuntimeFloor({ ...floor, backdrop: floor.backdrop ?? backdropForOrg(floor.org) }, characters),
     ),
   };
 }

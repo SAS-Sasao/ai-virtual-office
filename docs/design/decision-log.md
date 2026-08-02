@@ -188,8 +188,12 @@ cc-sier-organization は単一 `.git` の mono-repo に 3 組織 + 単一 `.acti
 2. **standby 床シェーディングの喪失**。backdrop あり時は z1 の床塗りをスキップするため、standby 部屋の減光（`globalAlpha 0.6`）が背景では表現されない。active/standby の視覚差は名前プレート/オーバーレイ側に委ねる余地を残す
 3. **キャラのデスク座標ズレ**。手続き生成のデスク座標は背景アートに描かれたデスクと一致しない（キャラは背景のデスクにピタッとは座らない）。これは ADR-002 の「一致しない素材は採用しない」の v1 緩和であり、整合は後続サイクル送り
 
+### 追記（2026-08-02・per-org backdrop を実装）
+
+当初「現状は既定 1 枚を全 org に適用（per-org は follow-up）」としていたが、キャラの org 別テーマ（M2-1c）に揃えて **backdrop も org 別テーマ**にした。`layout-runtime.ts` の `backdropForOrg(org)`（`BACKDROP_BY_ORG` マップ）で **`jutaku-dev-team`（RPG テーマ）→ ファンタジー部屋（`/assets/backdrops/fantasy.png`・ユーザー自作）/ 他 → オフィス部屋（既定）** を返し、`buildRuntimeLayout` の非破壊 default に使う。3 つの割り切り（アスペクト歪み・standby 床シェーディング喪失・デスク座標ズレ）は据え置き。
+
 ### スコープ外（follow-up）
 
 - ピクセル整合（背景に合わせた専用レイアウト or エディタ）
-- adapter が per-org backdrop を emit する版（org-adapter-dev・別サイクル。現状は既定 1 枚を全 org に適用）
-- ファンタジー背景・アスペクト比の厳密整合・歩行フレーム
+- **adapter が per-org backdrop を emit する版**（org-adapter-dev・別サイクル。現状は `layout-runtime` の org→backdrop マップで runtime 適用しており、レイアウトデータ側に持たせるのは将来）
+- アスペクト比の厳密整合・歩行フレーム

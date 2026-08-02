@@ -3,6 +3,7 @@ import type { Character, OfficeLayout, Room } from "@ai-office/protocol";
 import { findPath } from "./pathfinding";
 import {
   DEFAULT_BACKDROP,
+  backdropForOrg,
   RECEPTION_DEPT_ID,
   assignDesks,
   buildFallbackLayout,
@@ -206,6 +207,21 @@ describe("buildRuntimeLayout: default backdrop (M2-2 AC-6)", () => {
     const layout: OfficeLayout = { version: 1, floors: [customFloor] };
     const runtime = buildRuntimeLayout(layout, []);
     expect(runtime.floors[0].floor.backdrop).toBe("/assets/backdrops/custom.png");
+  });
+
+  // M2-2 拡張: backdrop を org テーマ別にする（キャラの ORG_THEME と揃える）。
+  it("backdropForOrg maps the RPG org to the fantasy room and others to the office room", () => {
+    expect(backdropForOrg("jutaku-dev-team")).toBe("/assets/backdrops/fantasy.png");
+    expect(backdropForOrg("domain-tech-collection")).toBe(DEFAULT_BACKDROP);
+    expect(backdropForOrg("standardization-initiative")).toBe(DEFAULT_BACKDROP);
+    expect(backdropForOrg("unknown-org")).toBe(DEFAULT_BACKDROP);
+  });
+
+  it("applies the fantasy room backdrop to a jutaku-dev-team (RPG) floor with no backdrop set", () => {
+    const rpgFloor = { ...REAL_SHAPE_FLOOR, org: "jutaku-dev-team" };
+    const layout: OfficeLayout = { version: 1, floors: [rpgFloor] };
+    const runtime = buildRuntimeLayout(layout, []);
+    expect(runtime.floors[0].floor.backdrop).toBe("/assets/backdrops/fantasy.png");
   });
 
   it("does not mutate the input layout's floor (non-destructive spread, F1)", () => {
