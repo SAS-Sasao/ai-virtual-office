@@ -160,3 +160,40 @@ cc-sier-organization は単一 `.git` の mono-repo に 3 組織 + 単一 `.acti
 
 - ファンタジー系/混成シート・per-org テーマ・部屋 backdrop を導入するとき（`image/` に温存中の 4 枚）
 - 歩行フレーム化・4 方向本格対応・オフライン画像パイプライン（sharp 導入）を行うとき
+
+---
+
+## ADR-006: 部屋 backdrop の汎用レイヤーを採用する（一枚絵背景を z0 に敷く）
+
+| 項目 | 内容 |
+|---|---|
+| 日付 | 2026-08-01 |
+| ステータス | 採用（Accepted・M2-2） |
+| 決定 | 任意のフロアが `floor.backdrop`（PNG パス）を持てば、それを z0 レイヤーに敷く**汎用機構**を実装する。手続き生成の部屋・家具・キャラは背景の上に描く。既定 backdrop（`/assets/backdrops/office.png`・1672×941・ユーザー自作）を `buildRuntimeLayout` で backdrop 未設定フロアに**実行時に非破壊適用**し、再インポートなしに全フロアで機構を可視化する。renderer の backdrop ローダは opt-in（`RendererDeps.backdropImageLoader?`・src キーで dedupe）で、未注入/未ロード/reject 時は従来の単色 z0 に据え置く |
+| 関係 | **ADR-002 の z0 `backdrop` レイヤーの実装本番化**。ADR-002 が「任意の装飾レイヤー」として設計に含めていた backdrop を、雰囲気用途として実装に落とす。ADR-002 の不変条件（レイヤー 1〜2 のデータは常に存在・当たり判定/経路探索/claim はレイアウトデータで不変）は維持する |
+
+### 描画とロードの構成
+
+1. **z0**: backdrop ロード済みなら `drawImage(bg, 0, 0, canvasW, canvasH)` で全面に敷く。未ロード/未注入/reject は従来の単色背景
+2. **z1**: backdrop あり時は床の status 塗りを省き**枠線 + 名前プレートのみ**残す（位置把握用）。backdrop なし時は従来どおり床材の status 塗り分け + 壁 + 名前プレート
+3. **z2 家具**: backdrop あり時は**描かない**（背景アートのデスクとの二重化を避ける）。backdrop なし時は従来どおりデスク primitive を描く
+4. **ロード**: `startRenderer` 内で各 `floor.backdrop` の**ユニークな src** を 1 回ずつロード（`Map<src, image>` で dedupe）。完了で当該 src を使う全フロアの `floorLayerCache` を無効化し、次フレームで backdrop 付きに再構築する。reject/未ロードは単色 z0 据え置きで再試行しない
+5. **境界**: `new Image()`/DOM は OfficeView（React 側）の `loadBackdropImage` に閉じ込め、`apps/web/game/` は React・DOM 非依存を維持する（NFR-7）
+
+### 明示する割り切り（ADR-002 の「一致しない素材は採用しない」に対する v1 緩和）
+
+本 ADR は backdrop を**雰囲気レイヤー**として位置づけ、モック通りのピクセル整合は**後続サイクル（専用フロア or エディタ）**送りとする。以下 3 点を silent 化せず明記する:
+
+1. **背景は cover-fit（アスペクト保持・中央寄せ・全面被覆）で敷く**（`background-size: cover` 相当。2026-08-02 修正 rev2）。試行の経緯: 旧「全面拡大(stretch)」は縦長フロアで横長アートが歪む → 「contain（レターボックス）」に変えたら、**背景が一部しか覆わず余白帯にキャラが浮く**別不具合が出た（キャラはフロア全体のタイルに配置されるため、背景は全面を覆う必要がある）→ **cover** に確定。cover は歪ませず・余白ゼロで全キャラが背景の上に乗る。代償は**アートの外周がキャンバス外へ少し見切れる**こと。見切れゼロの厳密整合（アート側をフロア比に合わせる／専用レイアウト）は後続サイクル
+2. **standby 床シェーディングの喪失**。backdrop あり時は z1 の床塗りをスキップするため、standby 部屋の減光（`globalAlpha 0.6`）が背景では表現されない。active/standby の視覚差は名前プレート/オーバーレイ側に委ねる余地を残す
+3. **キャラのデスク座標ズレ**。手続き生成のデスク座標は背景アートに描かれたデスクと一致しない（キャラは背景のデスクにピタッとは座らない）。これは ADR-002 の「一致しない素材は採用しない」の v1 緩和であり、整合は後続サイクル送り
+
+### 追記（2026-08-02・per-org backdrop を実装）
+
+当初「現状は既定 1 枚を全 org に適用（per-org は follow-up）」としていたが、キャラの org 別テーマ（M2-1c）に揃えて **backdrop も org 別テーマ**にした。`layout-runtime.ts` の `backdropForOrg(org)`（`BACKDROP_BY_ORG` マップ）で **`jutaku-dev-team`（RPG テーマ）→ ファンタジー部屋（`/assets/backdrops/fantasy.png`・ユーザー自作）/ 他 → オフィス部屋（既定）** を返し、`buildRuntimeLayout` の非破壊 default に使う。3 つの割り切り（アスペクト歪み・standby 床シェーディング喪失・デスク座標ズレ）は据え置き。
+
+### スコープ外（follow-up）
+
+- ピクセル整合（背景に合わせた専用レイアウト or エディタ）
+- **adapter が per-org backdrop を emit する版**（org-adapter-dev・別サイクル。現状は `layout-runtime` の org→backdrop マップで runtime 適用しており、レイアウトデータ側に持たせるのは将来）
+- アスペクト比の厳密整合・歩行フレーム

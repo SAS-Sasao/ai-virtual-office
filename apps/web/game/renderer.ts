@@ -17,10 +17,12 @@ import {
 
 // Canvas 2D レンダラー（M1-4a 全面改修）。
 //
-// レイヤー構成（ADR-002）: z0 backdrop（本サイクルは単色背景のみ。PNG 背景ロードは
-// M2/ADR-004 の対象外として据え置き）→ z1 部屋（床材の status 塗り分け・壁・
-// 名前プレート・standby 減光）→ z2 家具（デスク primitive）→ z3 キャラ
-// （スプライトシート）→ z4 オーバーレイ（吹き出し・名前・waiting 明滅）。
+// レイヤー構成（ADR-002）: z0 backdrop（`floor.backdrop` の一枚絵 PNG。opt-in の
+// backdropImageLoader が注入され当該 src がロード済みなら全面に敷く。それ以外は単色背景。
+// M2-2/ADR-006）→ z1 部屋（床材の status 塗り分け・壁・名前プレート・standby 減光。
+// backdrop あり時は床塗りを省き枠線 + 名前プレートのみ）→ z2 家具（デスク primitive。
+// backdrop あり時はスキップ）→ z3 キャラ（スプライトシート）→ z4 オーバーレイ
+// （吹き出し・名前・waiting 明滅）。
 //
 // 性能（NFR-1）: z0〜z2 はフロアごとにオフスクリーンへ 1 回だけ描画し（AC-8）、
 // 毎フレームは 1 回の drawImage（blit）+ z3/z4 のみを描く。フロア切替
@@ -40,6 +42,15 @@ import {
  */
 export type SpriteImageLoader = (src: string) => Promise<SpriteSourceImage>;
 
+/**
+ * フロア一枚絵背景（`floor.backdrop` の PNG）を **非同期に 1 回** 返す注入関数
+ * （M2-2・ADR-006）。**opt-in**（未注入なら従来の単色 z0 のまま）。本番は OfficeView が
+ * `new Image()` で `src`（`floor.backdrop` のパス）をロードする関数を渡す。
+ * `spriteImageLoader` と同じく、game/ 層に `new Image()`/DOM を持ち込まないための境界
+ * （React 非依存維持・NFR-7）。同一 src は呼び出し側でロードするのは 1 回で足りる。
+ */
+export type BackdropImageLoader = (src: string) => Promise<SpriteSourceImage>;
+
 export interface RendererDeps {
   /** z1/z2 のフロアレイヤー・z3 のスプライトアトラス生成に使う offscreen canvas ファクトリ。 */
   canvasFactory: CanvasFactory;
@@ -51,6 +62,11 @@ export interface RendererDeps {
    * ローダを渡さないため node 環境で `new Image()` を叩かず無回帰・AC-4b）。
    */
   spriteImageLoader?: SpriteImageLoader;
+  /**
+   * 任意。渡されたときだけ `floor.backdrop`（PNG パス）を z0 に敷く（M2-2・ADR-006）。
+   * 未注入時は従来の単色 z0 のまま（既存 renderer テストはローダを渡さないため無回帰・AC-3）。
+   */
+  backdropImageLoader?: BackdropImageLoader;
 }
 
 export interface RendererHandle {
@@ -227,7 +243,23 @@ function poseFor(character: RuntimeCharacter, now: number, fastMode: boolean): S
   return "idle";
 }
 
-function buildFloorLayer(floor: RuntimeFloor["floor"], canvasFactory: CanvasFactory): DrawableCanvas {
+/**
+ * z0〜z2 の静的フロアレイヤーを 1 枚の offscreen canvas へ焼き込む。
+ *
+ * `backdropImage` が渡されたとき（M2-2・ADR-006）は雰囲気レイヤーとして扱い:
+ * - z0 を単色 fill から backdrop の `drawImage(bg, 0, 0, width, height)` に置換
+ * - z2 家具（デスク primitive）は **描かない**（背景アートのデスクとの二重化を避ける）
+ * - z1 は床の status 塗りを省き **枠線 + 名前プレートのみ** 残す（位置把握用。床の
+ *   status 別シェーディング＝standby 減光は背景に委ねるため失われる。ADR-006 割り切り②）
+ *
+ * `backdropImage` が無いときは従来どおり（単色 z0 + 床塗り + 家具）。当たり判定・
+ * 経路探索・claim はレイアウトデータで不変（ADR-002 の不変条件）。
+ */
+function buildFloorLayer(
+  floor: RuntimeFloor["floor"],
+  canvasFactory: CanvasFactory,
+  backdropImage?: SpriteSourceImage,
+): DrawableCanvas {
   const width = floor.grid.cols * floor.grid.tileSize;
   const height = floor.grid.rows * floor.grid.tileSize;
   const canvas = canvasFactory(width, height);
@@ -238,21 +270,39 @@ function buildFloorLayer(floor: RuntimeFloor["floor"], canvasFactory: CanvasFact
 
   const tileSize = floor.grid.tileSize;
 
-  // z0: backdrop（本サイクルは単色のみ。PNG 背景ロードは対象外 = ADR-002/004）
+  // z0: backdrop。画像ロード済みなら **アスペクト比を保って cover（キャンバス全面を覆う
+  // よう拡大）** し中央寄せで敷く（`background-size: cover` 相当。ADR-006 rev2）。
+  // フロアごとにキャンバスのアスペクトが違う（例: 受託開発フロアは 960x896 の縦長）。
+  // 旧「全面拡大(stretch)」は歪み、「contain」は余白帯にキャラが浮く不具合が出た。cover
+  // なら**歪まず・余白ゼロで全キャラが背景の上に乗る**（代償: アートの外周がキャンバス外へ
+  // 少し見切れる）。未ロード/未注入時は単色（キャンバスクリップで余白は塗り潰される）。
   ctx.fillStyle = BACKGROUND_COLOR;
   ctx.fillRect(0, 0, width, height);
+  if (backdropImage) {
+    const artW = backdropImage.width;
+    const artH = backdropImage.height;
+    const scale = artW > 0 && artH > 0 ? Math.max(width / artW, height / artH) : 1;
+    const drawW = artW * scale;
+    const drawH = artH * scale;
+    const dx = (width - drawW) / 2; // cover: 負値になり得る（はみ出しをクリップ）
+    const dy = (height - drawH) / 2;
+    ctx.drawImage(backdropImage as unknown as CanvasImageSource, dx, dy, drawW, drawH);
+  }
 
-  // z1: 部屋（床材の status 塗り分け・壁・名前プレート）
+  // z1: 部屋（backdrop なし = 床材の status 塗り分け + 壁 + 名前プレート /
+  //      backdrop あり = 床塗りを省き枠線 + 名前プレートのみ）
   for (const room of floor.rooms) {
     const x = room.x * tileSize;
     const y = room.y * tileSize;
     const w = room.w * tileSize;
     const h = room.h * tileSize;
 
-    ctx.fillStyle = room.status === "active" ? ROOM_FLOOR_ACTIVE : ROOM_FLOOR_STANDBY;
-    ctx.globalAlpha = room.status === "active" ? 1 : 0.6; // standby は減光
-    ctx.fillRect(x, y, w, h);
-    ctx.globalAlpha = 1;
+    if (!backdropImage) {
+      ctx.fillStyle = room.status === "active" ? ROOM_FLOOR_ACTIVE : ROOM_FLOOR_STANDBY;
+      ctx.globalAlpha = room.status === "active" ? 1 : 0.6; // standby は減光
+      ctx.fillRect(x, y, w, h);
+      ctx.globalAlpha = 1;
+    }
 
     ctx.strokeStyle = BORDER_COLOR;
     ctx.lineWidth = 2;
@@ -266,15 +316,17 @@ function buildFloorLayer(floor: RuntimeFloor["floor"], canvasFactory: CanvasFact
     ctx.fillText(room.name, x + 4, y + 10);
   }
 
-  // z2: 家具（デスク primitive）
-  for (const furniture of floor.furniture) {
-    if (furniture.kind !== "desk") continue;
-    const x = furniture.x * tileSize;
-    const y = furniture.y * tileSize;
-    ctx.fillStyle = DESK_COLOR;
-    ctx.fillRect(x, y, tileSize, tileSize * 0.7);
-    ctx.strokeStyle = BORDER_COLOR;
-    ctx.strokeRect(x, y, tileSize, tileSize * 0.7);
+  // z2: 家具（デスク primitive）。backdrop あり時はスキップ（二重デスク回避・ADR-006）。
+  if (!backdropImage) {
+    for (const furniture of floor.furniture) {
+      if (furniture.kind !== "desk") continue;
+      const x = furniture.x * tileSize;
+      const y = furniture.y * tileSize;
+      ctx.fillStyle = DESK_COLOR;
+      ctx.fillRect(x, y, tileSize, tileSize * 0.7);
+      ctx.strokeStyle = BORDER_COLOR;
+      ctx.strokeRect(x, y, tileSize, tileSize * 0.7);
+    }
   }
 
   return canvas;
@@ -301,6 +353,10 @@ export function startRenderer(
 
   const floorLayerCache = new Map<string, DrawableCanvas>();
   const spriteCache = new Map<string, SpriteSheet>();
+  // M2-2: ロード済み backdrop 画像を **src キー** で保持する（F2 dedupe）。既定 backdrop を
+  // 全フロアに当てると同一 src が複数フロアで共有されるため、org キーだと同じ画像を
+  // 何度も decode してしまう。src キーなら素材あたり 1 回のロードで済む（AC-11）。
+  const backdropImageBySrc = new Map<string, SpriteSourceImage>();
 
   let currentOrg = runtimeLayout.floors[0]?.floor.org;
   let rafId: number | undefined;
@@ -331,6 +387,33 @@ export function startRenderer(
       });
   };
 
+  // M2-2/ADR-006: フロア backdrop（一枚絵背景）。ローダが注入されたときだけ、各
+  // `floor.backdrop` の **ユニークな src** を 1 回ずつロードする。完了で、その src を使う
+  // 全フロアの floorLayerCache を無効化し、次フレームで backdrop 付きに再構築させる
+  // （spriteImageLoader の cache クリア方式と対称）。reject/未ロード/未注入は単色 z0
+  // 据え置きで再試行しない（ローダは src あたり 1 回しか呼ばない・無限ループ無し）。
+  if (deps.backdropImageLoader) {
+    const backdropLoader = deps.backdropImageLoader;
+    const requestedSrcs = new Set<string>();
+    for (const runtimeFloor of runtimeLayout.floors) {
+      const src = runtimeFloor.floor.backdrop;
+      if (!src || requestedSrcs.has(src)) continue;
+      requestedSrcs.add(src);
+      backdropLoader(src)
+        .then((image) => {
+          if (stopped) return;
+          backdropImageBySrc.set(src, image);
+          // 同一 src を使う全フロアのレイヤーキャッシュを無効化（次フレームで再構築）。
+          for (const f of runtimeLayout.floors) {
+            if (f.floor.backdrop === src) floorLayerCache.delete(f.floor.org);
+          }
+        })
+        .catch(() => {
+          // ロード失敗時は単色 z0 据え置き（再試行しない）。
+        });
+    }
+  }
+
   const findFloor = (org: string | undefined): RuntimeFloor | undefined =>
     runtimeLayout.floors.find((f) => f.floor.org === org);
 
@@ -340,7 +423,11 @@ export function startRenderer(
     if (cached) return cached;
     const runtimeFloor = findFloor(org);
     if (!runtimeFloor) return undefined;
-    const layer = buildFloorLayer(runtimeFloor.floor, deps.canvasFactory);
+    // backdrop 設定 かつ その src がロード済みのときだけ backdrop 付きに焼き込む。
+    // 未ロード/未注入/reject は undefined = 従来の単色 z0（据え置き）。
+    const src = runtimeFloor.floor.backdrop;
+    const backdropImage = src ? backdropImageBySrc.get(src) : undefined;
+    const layer = buildFloorLayer(runtimeFloor.floor, deps.canvasFactory, backdropImage);
     floorLayerCache.set(org, layer);
     return layer;
   };

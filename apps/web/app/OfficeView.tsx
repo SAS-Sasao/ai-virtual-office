@@ -64,6 +64,21 @@ function loadSpriteImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
+/**
+ * 本番のフロア backdrop 画像ローダ（renderer へ opt-in で注入する・M2-2/ADR-006）。
+ * `spriteImageLoader` と同じく `new Image()`/DOM への依存はこの React 側に閉じ込め、
+ * game/ 層には持ち込まない（NFR-7）。`src` は `floor.backdrop` のパス。ロード完了で
+ * `<img>` を解決し、失敗時は reject する（renderer 側は reject を単色 z0 据え置きとして扱う）。
+ */
+function loadBackdropImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`failed to load ${src}`));
+    img.src = src;
+  });
+}
+
 const PRUNE_INTERVAL_MS = 30_000;
 /**
  * 経過（セッション一覧・待ちパネル）の再描画間隔。1 秒刻みの setInterval で
@@ -178,6 +193,9 @@ export function OfficeView({ initialLayoutMeta }: OfficeViewProps) {
           // opt-in で注入する。未ロード/失敗時は renderer がそのテーマの生成スプライトへ
           // フォールバックする。
           spriteImageLoader: loadSpriteImage,
+          // ADR-006: フロア backdrop（一枚絵背景）を opt-in で注入する。
+          // 未ロード/失敗時は renderer が単色 z0 へフォールバックする。
+          backdropImageLoader: loadBackdropImage,
         });
       }
     };
@@ -337,7 +355,7 @@ export function OfficeView({ initialLayoutMeta }: OfficeViewProps) {
       </div>
 
       <footer style={{ marginTop: 16, fontSize: 12, color: TEXT_SECONDARY }}>
-        キャラクター素材: 作 プロジェクトオーナー（プロジェクトオリジナル）
+        キャラクター・背景素材: 作 プロジェクトオーナー（プロジェクトオリジナル）
       </footer>
     </main>
   );

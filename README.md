@@ -121,3 +121,4 @@ Stop hooks（protocol 両系テスト / テスト弱体化ガード / E2E スモ
 外部素材は CC0 / CC-BY 系のみを使用します。自作（プロジェクトオリジナル）素材も可とし、いずれも出典を README と画面フッターの両方に明記します（NFR-6 / requirements.md:150 / CLAUDE.md 開発規約 5。自作素材は外部 CC0/CC-BY 制約の対象外ですが出典表記は必須。詳細は ADR-005）。
 
 - キャラクター素材: 作 プロジェクトオーナー（プロジェクトオリジナル）。`apps/web/public/assets/characters/office.png`（1536×1024・オフィス系 8 体シート）。M2-1 で採用（decision-log ADR-005）。
+- 背景素材: 作 プロジェクトオーナー（プロジェクトオリジナル）。`apps/web/public/assets/backdrops/office.png`（1672×941・オフィス系フロア背景）。フロア backdrop（z0 レイヤー）の既定素材。M2-2 で採用（decision-log ADR-006）。

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Character, OfficeLayout, Room } from "@ai-office/protocol";
 import { findPath } from "./pathfinding";
 import {
+  DEFAULT_BACKDROP,
+  backdropForOrg,
   RECEPTION_DEPT_ID,
   assignDesks,
   buildFallbackLayout,
@@ -190,5 +192,44 @@ describe("buildRuntimeLayout", () => {
       const path = findPath(runtimeFloor.walkGrid, runtimeFloor.entrance, room.door);
       expect(path, `room "${room.id}" should be reachable from the entrance`).not.toBeNull();
     }
+  });
+});
+
+describe("buildRuntimeLayout: default backdrop (M2-2 AC-6)", () => {
+  it("applies DEFAULT_BACKDROP to a floor that has no backdrop set", () => {
+    const layout: OfficeLayout = { version: 1, floors: [REAL_SHAPE_FLOOR] };
+    const runtime = buildRuntimeLayout(layout, []);
+    expect(runtime.floors[0].floor.backdrop).toBe(DEFAULT_BACKDROP);
+  });
+
+  it("preserves an explicitly-set backdrop instead of overriding it with the default", () => {
+    const customFloor = { ...REAL_SHAPE_FLOOR, backdrop: "/assets/backdrops/custom.png" };
+    const layout: OfficeLayout = { version: 1, floors: [customFloor] };
+    const runtime = buildRuntimeLayout(layout, []);
+    expect(runtime.floors[0].floor.backdrop).toBe("/assets/backdrops/custom.png");
+  });
+
+  // M2-2 拡張: backdrop を org テーマ別にする（キャラの ORG_THEME と揃える）。
+  it("backdropForOrg maps the RPG org to the fantasy room and others to the office room", () => {
+    expect(backdropForOrg("jutaku-dev-team")).toBe("/assets/backdrops/fantasy.png");
+    expect(backdropForOrg("domain-tech-collection")).toBe(DEFAULT_BACKDROP);
+    expect(backdropForOrg("standardization-initiative")).toBe(DEFAULT_BACKDROP);
+    expect(backdropForOrg("unknown-org")).toBe(DEFAULT_BACKDROP);
+  });
+
+  it("applies the fantasy room backdrop to a jutaku-dev-team (RPG) floor with no backdrop set", () => {
+    const rpgFloor = { ...REAL_SHAPE_FLOOR, org: "jutaku-dev-team" };
+    const layout: OfficeLayout = { version: 1, floors: [rpgFloor] };
+    const runtime = buildRuntimeLayout(layout, []);
+    expect(runtime.floors[0].floor.backdrop).toBe("/assets/backdrops/fantasy.png");
+  });
+
+  it("does not mutate the input layout's floor (non-destructive spread, F1)", () => {
+    const inputFloor: OfficeLayout["floors"][number] = { ...REAL_SHAPE_FLOOR };
+    // 入力フロアは backdrop 未設定であることを前提に、buildRuntimeLayout 後も未設定を維持する
+    expect(inputFloor.backdrop).toBeUndefined();
+    const layout: OfficeLayout = { version: 1, floors: [inputFloor] };
+    buildRuntimeLayout(layout, []);
+    expect(inputFloor.backdrop).toBeUndefined();
   });
 });
