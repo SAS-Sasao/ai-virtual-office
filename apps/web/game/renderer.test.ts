@@ -2,11 +2,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { OfficeEvent } from "@ai-office/protocol";
+import type { Character, OfficeEvent } from "@ai-office/protocol";
 import { OfficeState } from "./office-state";
 import { buildRuntimeLayout } from "./layout-runtime";
 import { Scene } from "./scene";
-import { cellFor, startRenderer } from "./renderer";
+import { OFFICE_CELL_BBOX, RPG_CELL_BBOX, SPRITE_SHEET_SRC, cellFor, startRenderer, themeForOrg } from "./renderer";
 import type { CanvasFactory, DrawableCanvas, SpriteSourceImage } from "./sprites";
 import { REAL_SHAPE_CHARACTERS, REAL_SHAPE_FLOOR } from "./fixtures/real-layout-fixture";
 
@@ -400,9 +400,14 @@ describe("startRenderer: focus ring / sub label / hover card (M1-4b AC-4/AC-6)",
   });
 });
 
-describe("cellFor (M2-1 AC-3): every roster role/dept maps to a valid sheet cell", () => {
+describe("cellFor (M2-1 AC-3 / M2-1b): every roster role/dept maps to a valid sheet cell", () => {
+  // マクロセル（4 列 x 2 行 x 384x512）の外枠。M2-1b でタイトな bbox（実測値）に
+  // 差し替えたため sw/sh は 384/512 固定ではなくなったが、各セルは対応する
+  // マクロセル（col 0-3 x row 0-1）の枠内に収まっているはずである。
   const SW = 384;
   const SH = 512;
+  const SHEET_W = 1536;
+  const SHEET_H = 1024;
   // AC-3 で列挙された 8 dept（col 0-3 x row 0-1 の 8 セルへ決定的に割当）。
   const ENUMERATED_DEPTS = [
     "dept-architecture",
@@ -415,21 +420,31 @@ describe("cellFor (M2-1 AC-3): every roster role/dept maps to a valid sheet cell
     "dept-secretary",
   ];
 
-  function assertValidCell(role: string, dept: string): void {
-    const cell = cellFor(role, dept);
-    expect(cell.sw).toBe(SW);
-    expect(cell.sh).toBe(SH);
-    const col = cell.sx / SW;
-    const row = cell.sy / SH;
-    expect(Number.isInteger(col)).toBe(true);
-    expect(Number.isInteger(row)).toBe(true);
+  function assertValidCell(role: string, dept: string, theme: "office" | "rpg" = "office"): void {
+    const cell = cellFor(theme, role, dept);
+    // M2-1b: タイトな bbox（マクロセルの余白込み矩形より必ず小さい = 切り抜きが甘い
+    // 問題の回帰防止）。
+    expect(cell.sw).toBeLessThan(SW);
+    expect(cell.sh).toBeLessThan(SH);
+    expect(cell.sw).toBeGreaterThan(0);
+    expect(cell.sh).toBeGreaterThan(0);
+    // シート境界内に収まっている
+    expect(cell.sx).toBeGreaterThanOrEqual(0);
+    expect(cell.sy).toBeGreaterThanOrEqual(0);
+    expect(cell.sx + cell.sw).toBeLessThanOrEqual(SHEET_W);
+    expect(cell.sy + cell.sh).toBeLessThanOrEqual(SHEET_H);
+    // 対応するマクロセル（col 0-3 x row 0-1・384x512）の枠内に収まっている
+    const col = Math.floor(cell.sx / SW);
+    const row = Math.floor(cell.sy / SH);
     expect(col).toBeGreaterThanOrEqual(0);
     expect(col).toBeLessThanOrEqual(3);
     expect(row).toBeGreaterThanOrEqual(0);
     expect(row).toBeLessThanOrEqual(1);
+    expect(cell.sx + cell.sw).toBeLessThanOrEqual((col + 1) * SW);
+    expect(cell.sy + cell.sh).toBeLessThanOrEqual((row + 1) * SH);
   }
 
-  it("maps all enumerated depts to col 0-3 / row 0-1", () => {
+  it("maps all enumerated depts to col 0-3 / row 0-1 with a tight bbox", () => {
     for (const dept of ENUMERATED_DEPTS) assertValidCell("any-role", dept);
   });
 
@@ -439,9 +454,13 @@ describe("cellFor (M2-1 AC-3): every roster role/dept maps to a valid sheet cell
   });
 
   it("is deterministic (same input → same output)", () => {
-    expect(cellFor("lead-developer", "dept-development")).toEqual(cellFor("lead-developer", "dept-development"));
+    expect(cellFor("office", "lead-developer", "dept-development")).toEqual(
+      cellFor("office", "lead-developer", "dept-development"),
+    );
     // dept-research と dept-retail-domain は同一セルを共有する（制服的表現・決定的）
-    expect(cellFor("tech-researcher", "dept-research")).toEqual(cellFor("retail-domain-researcher", "dept-retail-domain"));
+    expect(cellFor("office", "tech-researcher", "dept-research")).toEqual(
+      cellFor("office", "retail-domain-researcher", "dept-retail-domain"),
+    );
   });
 
   it("maps every real ~/.ai-office roster role/dept (or the enumerated depts) to a valid cell", () => {
@@ -453,6 +472,155 @@ describe("cellFor (M2-1 AC-3): every roster role/dept maps to a valid sheet cell
       : ENUMERATED_DEPTS.map((dept) => ({ role: "roster-role", dept }));
     expect(entries.length).toBeGreaterThan(0);
     for (const { role, dept } of entries) assertValidCell(role, dept);
+  });
+
+  // M2-1b 純増: シート上の 8 セルすべて（index0-7）が、マクロセル全体（384x512）
+  // より必ず小さいタイトな bbox で、かつ実測値表（診断メモ）どおりの矩形を返す
+  // （切り抜き精度の直接検証。index7 は現行 DEPT_CELL_INDEX に未割当＝cellFor から
+  // は到達できないため、テーブル自体（OFFICE_CELL_BBOX）を直接検証して 8 index 全数を
+  // 網羅する。M2-1c: office/rpg 2 テーマ化に伴い CELL_BBOX → OFFICE_CELL_BBOX に改称
+  // したのみで、期待値そのものは変更していない）。
+  it("holds the exact measured tight bbox for every one of the 8 sheet cells (office theme, M2-1b)", () => {
+    const EXPECTED_BBOX = [
+      { sx: 80, sy: 45, sw: 232, sh: 442 }, // index0
+      { sx: 452, sy: 52, sw: 257, sh: 435 }, // index1
+      { sx: 818, sy: 55, sw: 281, sh: 432 }, // index2
+      { sx: 1205, sy: 46, sw: 233, sh: 441 }, // index3
+      { sx: 69, sy: 526, sw: 278, sh: 440 }, // index4
+      { sx: 449, sy: 526, sw: 226, sh: 440 }, // index5
+      { sx: 805, sy: 526, sw: 211, sh: 440 }, // index6
+      { sx: 1163, sy: 538, sw: 239, sh: 427 }, // index7
+    ];
+    expect(OFFICE_CELL_BBOX).toHaveLength(8);
+    EXPECTED_BBOX.forEach((expected, index) => {
+      expect(OFFICE_CELL_BBOX[index]).toEqual(expected);
+      expect(OFFICE_CELL_BBOX[index].sw).toBeLessThan(SW);
+      expect(OFFICE_CELL_BBOX[index].sh).toBeLessThan(SH);
+    });
+  });
+
+  it("index7 (currently unmapped by any dept) is still a well-formed cell within the sheet (office theme)", () => {
+    // dept 経由では到達できない予約枠だが、bbox 自体は他の 7 セルと同じ制約を満たす。
+    const cell = OFFICE_CELL_BBOX[7];
+    expect(cell.sx + cell.sw).toBeLessThanOrEqual(SHEET_W);
+    expect(cell.sy + cell.sh).toBeLessThanOrEqual(SHEET_H);
+    const col = Math.floor(cell.sx / SW);
+    const row = Math.floor(cell.sy / SH);
+    expect(col).toBe(3);
+    expect(row).toBe(1);
+  });
+
+  // M2-1c 純増: rpg テーマの CELL_BBOX 表・cellFor("rpg", ...) 経路の検証
+  // （org ごとのテーマ切替。domain-tech-collection/standardization-initiative は
+  // office のまま・jutaku-dev-team だけ rpg になる想定）。
+  describe("rpg theme (M2-1c)", () => {
+    it("maps all enumerated depts to a tight bbox within the sheet (rpg theme)", () => {
+      for (const dept of ENUMERATED_DEPTS) assertValidCell("any-role", dept, "rpg");
+    });
+
+    it("falls back to a valid cell for unknown/empty dept and role (rpg theme, default = engineer)", () => {
+      assertValidCell("mystery-role", "dept-does-not-exist", "rpg");
+      assertValidCell("", "", "rpg");
+    });
+
+    it("is deterministic and shares the office theme's dept→index assignment (same index across themes)", () => {
+      expect(cellFor("rpg", "lead-developer", "dept-development")).toEqual(
+        cellFor("rpg", "lead-developer", "dept-development"),
+      );
+      // office/rpg は同じ dept→index 対応を共有する（DEPT_CELL_INDEX は共通）。
+      expect(cellFor("office", "any-role", "dept-development")).toEqual(OFFICE_CELL_BBOX[0]);
+      expect(cellFor("rpg", "any-role", "dept-development")).toEqual(RPG_CELL_BBOX[0]);
+    });
+
+    it("holds the exact measured tight bbox for every one of the 8 sheet cells (rpg theme, M2-1c)", () => {
+      const EXPECTED_RPG_BBOX = [
+        { sx: 41, sy: 28, sw: 291, sh: 439 }, // index0
+        { sx: 434, sy: 40, sw: 291, sh: 427 }, // index1
+        { sx: 824, sy: 57, sw: 260, sh: 409 }, // index2
+        { sx: 1180, sy: 51, sw: 307, sh: 416 }, // index3
+        { sx: 35, sy: 531, sw: 333, sh: 430 }, // index4
+        { sx: 427, sy: 531, sw: 281, sh: 431 }, // index5
+        { sx: 782, sy: 538, sw: 340, sh: 422 }, // index6
+        { sx: 1190, sy: 535, sw: 266, sh: 426 }, // index7
+      ];
+      expect(RPG_CELL_BBOX).toHaveLength(8);
+      EXPECTED_RPG_BBOX.forEach((expected, index) => {
+        expect(RPG_CELL_BBOX[index]).toEqual(expected);
+        expect(RPG_CELL_BBOX[index].sw).toBeLessThan(SW);
+        expect(RPG_CELL_BBOX[index].sh).toBeLessThan(SH);
+        expect(RPG_CELL_BBOX[index].sx + RPG_CELL_BBOX[index].sw).toBeLessThanOrEqual(SHEET_W);
+        expect(RPG_CELL_BBOX[index].sy + RPG_CELL_BBOX[index].sh).toBeLessThanOrEqual(SHEET_H);
+      });
+      // office と rpg は同じ 8 セルの実測値表だが、値そのものは別（別素材）。
+      expect(RPG_CELL_BBOX).not.toEqual(OFFICE_CELL_BBOX);
+    });
+  });
+});
+
+describe("themeForOrg (M2-1c): org ごとのキャラスプライトテーマ切替", () => {
+  it("maps jutaku-dev-team to rpg", () => {
+    expect(themeForOrg("jutaku-dev-team")).toBe("rpg");
+  });
+
+  it("maps known office-theme orgs to office", () => {
+    expect(themeForOrg("domain-tech-collection")).toBe("office");
+    expect(themeForOrg("standardization-initiative")).toBe("office");
+  });
+
+  it("falls back to office for unknown/未知 org", () => {
+    expect(themeForOrg("some-org-nobody-registered")).toBe("office");
+    expect(themeForOrg("")).toBe("office");
+  });
+});
+
+describe("SPRITE_SHEET_SRC (M2-1c): テーマ別スプライトシート画像の静的配信パス", () => {
+  it("has a distinct static path for each theme", () => {
+    expect(SPRITE_SHEET_SRC.office).toBe("/assets/characters/office.png");
+    expect(SPRITE_SHEET_SRC.rpg).toBe("/assets/characters/rpg.png");
+    expect(SPRITE_SHEET_SRC.office).not.toBe(SPRITE_SHEET_SRC.rpg);
+  });
+});
+
+describe("sprite anchor math (M2-1b): foot(bottom-center)-anchored placement", () => {
+  // renderer.ts の draw ループと同じ計算式を、tileSize/frame アスペクト比を
+  // 変えながら直接検証する（描画不具合③「配置がおかしい」の回帰防止・純増）。
+  // dx = footX - drawW/2, dy = footY - drawH, drawW = drawH * (frameWidth/frameHeight)
+  function computeAnchor(tileX: number, tileY: number, tileSize: number, heightTiles: number, frameW: number, frameH: number) {
+    const screenX = tileX * tileSize;
+    const screenY = tileY * tileSize;
+    const drawH = tileSize * heightTiles;
+    const drawW = drawH * (frameW / frameH);
+    const footX = screenX + tileSize / 2;
+    const footY = screenY + tileSize;
+    const dx = footX - drawW / 2;
+    const dy = footY - drawH;
+    return { footX, footY, dx, dy, drawW, drawH };
+  }
+
+  it("centers the sprite horizontally on the tile (dx + drawW/2 === tile center)", () => {
+    const { dx, drawW, footX } = computeAnchor(3, 5, 32, 2.4, 232, 442);
+    expect(dx + drawW / 2).toBeCloseTo(footX, 5);
+    expect(footX).toBe(3 * 32 + 32 / 2);
+  });
+
+  it("plants the sprite's bottom edge exactly at the tile's bottom edge (dy + drawH === footY)", () => {
+    const { dy, drawH, footY } = computeAnchor(3, 5, 32, 2.4, 232, 442);
+    expect(dy + drawH).toBeCloseTo(footY, 5);
+    expect(footY).toBe(5 * 32 + 32);
+  });
+
+  it("draws taller than one tile (bigger than the old fixed SPRITE_SIZE_PX=24) for a typical tileSize", () => {
+    const { drawH } = computeAnchor(0, 0, 32, 2.4, 232, 442);
+    expect(drawH).toBeGreaterThan(32); // 1 タイルより明確に大きい（①「小さい」の回帰防止）
+    expect(drawH).toBe(32 * 2.4);
+  });
+
+  it("derives drawW from the sheet's own frame aspect ratio (works for both tight PNG bbox and generated frames)", () => {
+    const png = computeAnchor(0, 0, 32, 2.4, 232, 442); // PNG index0 の実測 bbox 比
+    const generated = computeAnchor(0, 0, 32, 2.4, 20, 28); // generated アトラスのフレーム比
+    expect(png.drawW).toBeCloseTo(png.drawH * (232 / 442), 5);
+    expect(generated.drawW).toBeCloseTo(generated.drawH * (20 / 28), 5);
+    expect(png.drawW).not.toBeCloseTo(generated.drawW, 1);
   });
 });
 
@@ -493,7 +661,7 @@ describe("startRenderer: sprite source selection (M2-1 AC-4/AC-9)", () => {
     return drawImageCalls.filter((args) => args.length === 9);
   }
 
-  function startWithLoader(loader: ((...a: never[]) => Promise<SpriteSourceImage>) | undefined) {
+  function startWithLoader(loader: ((src: string) => Promise<SpriteSourceImage>) | undefined) {
     const { runtimeLayout, scene } = buildTestSceneWithRoster();
     const { factory, created } = createStubCanvasFactory();
     const { canvas, drawImageCalls } = createMainCanvasStub();
@@ -835,6 +1003,137 @@ describe("startRenderer: floor backdrop layer (M2-2 AC-1/2/4/5/11)", () => {
     // 未注入 = backdrop の drawImage 無し・家具は描かれる（単色 z0 の従来経路）
     expect(floor.drawImageCalls.some((a) => a.length === 5 && a[0] === BACKDROP_IMAGE)).toBe(false);
     expect(floor.fillRectCalls.filter((c) => c.fillStyle === DESK_COLOR)).toHaveLength(3);
+
+    handle.stop();
+  });
+});
+
+describe("startRenderer: org theme sprite source selection (M2-1c)", () => {
+  // 注入する src 別スタブ画像（PNG 経路で使われたテーマを drawImage の source 同一性で判定する）。
+  const OFFICE_IMAGE: SpriteSourceImage = { width: 1536, height: 1024 };
+  const RPG_IMAGE: SpriteSourceImage = { width: 1536, height: 1024 };
+  const IMAGE_BY_SRC: Record<string, SpriteSourceImage> = {
+    [SPRITE_SHEET_SRC.office]: OFFICE_IMAGE,
+    [SPRITE_SHEET_SRC.rpg]: RPG_IMAGE,
+  };
+
+  // SECOND_FLOOR（jutaku-dev-team）向けのロースタ。REAL_SHAPE_CHARACTERS と同じ
+  // dept（SECOND_FLOOR は REAL_SHAPE_FLOOR の部屋構成をそのまま流用）に配属する。
+  const JUTAKU_CHARACTERS: Character[] = REAL_SHAPE_CHARACTERS.map((c) => ({
+    ...c,
+    id: `jutaku-dev-team:${c.role}`,
+    org: "jutaku-dev-team",
+  }));
+
+  /** src 別に解決を手動制御できるローダ（sleep 禁止・決定論。src ごとの呼び出し回数も記録する）。 */
+  function createControllableThemeLoader() {
+    const calls: string[] = [];
+    const resolvers = new Map<string, (image: SpriteSourceImage) => void>();
+    const promises = new Map<string, Promise<SpriteSourceImage>>();
+    const loader = (src: string): Promise<SpriteSourceImage> => {
+      calls.push(src);
+      const promise = new Promise<SpriteSourceImage>((resolve) => {
+        resolvers.set(src, resolve);
+      });
+      promises.set(src, promise);
+      return promise;
+    };
+    return {
+      loader,
+      calls,
+      resolve: (src: string) => {
+        resolvers.get(src)?.(IMAGE_BY_SRC[src]);
+        return promises.get(src);
+      },
+    };
+  }
+
+  /** スプライトの draw は drawImage を 9 引数で呼ぶ（フロアレイヤーの blit は 3 引数）。 */
+  function spriteDrawCalls(drawImageCalls: unknown[][]): unknown[][] {
+    return drawImageCalls.filter((args) => args.length === 9);
+  }
+
+  function buildTwoThemeScene() {
+    const characters = [...REAL_SHAPE_CHARACTERS, ...JUTAKU_CHARACTERS];
+    const runtimeLayout = buildRuntimeLayout({ version: 1, floors: [REAL_SHAPE_FLOOR, SECOND_FLOOR] }, characters);
+    const officeState = new OfficeState();
+    const scene = new Scene(runtimeLayout, characters, officeState, { fastMode: true });
+    return { runtimeLayout, scene };
+  }
+
+  it("loads office/rpg lazily per theme (not eagerly both) and draws each org's characters with its own theme image", async () => {
+    const { runtimeLayout, scene } = buildTwoThemeScene();
+    const { factory } = createStubCanvasFactory();
+    const { canvas, drawImageCalls } = createMainCanvasStub();
+    const raf = createManualRaf();
+    const ctl = createControllableThemeLoader();
+
+    const handle = startRenderer(canvas, scene, runtimeLayout, {
+      canvasFactory: factory,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      spriteImageLoader: ctl.loader,
+    });
+
+    // 初期フロア（domain-tech-collection = office テーマ）だけが描画対象 →
+    // office の画像ロードだけが開始される（rpg はまだ 1 度も要求されない）。
+    raf.pump(0);
+    expect(ctl.calls).toEqual([SPRITE_SHEET_SRC.office]);
+
+    await ctl.resolve(SPRITE_SHEET_SRC.office);
+    drawImageCalls.length = 0; // frame 0（未解決時の generated 描画）を除外して frame 16 だけを見る
+    raf.pump(16);
+    let sprites = spriteDrawCalls(drawImageCalls);
+    expect(sprites.length).toBeGreaterThan(0);
+    expect(sprites.every((args) => args[0] === OFFICE_IMAGE)).toBe(true);
+
+    // rpg テーマの org（jutaku-dev-team）のフロアへ切り替えると、そのフロアの
+    // キャラを描く際に rpg の画像ロードが新規に 1 回だけ開始される
+    // （office は既にロード済みなので再ロードしない = 同一 src の重複回避）。
+    drawImageCalls.length = 0;
+    handle.setFloor("jutaku-dev-team");
+    raf.pump(32);
+    expect(ctl.calls).toEqual([SPRITE_SHEET_SRC.office, SPRITE_SHEET_SRC.rpg]);
+
+    await ctl.resolve(SPRITE_SHEET_SRC.rpg);
+    drawImageCalls.length = 0; // frame 32（未解決時の generated 描画）を除外して frame 48 だけを見る
+    raf.pump(48);
+    sprites = spriteDrawCalls(drawImageCalls);
+    expect(sprites.length).toBeGreaterThan(0);
+    expect(sprites.every((args) => args[0] === RPG_IMAGE)).toBe(true);
+
+    // office フロアへ戻っても office 画像は再ロードしない（合計で各テーマ 1 回ずつ）。
+    drawImageCalls.length = 0;
+    handle.setFloor("domain-tech-collection");
+    raf.pump(64);
+    expect(ctl.calls).toEqual([SPRITE_SHEET_SRC.office, SPRITE_SHEET_SRC.rpg]);
+    sprites = spriteDrawCalls(drawImageCalls);
+    expect(sprites.length).toBeGreaterThan(0);
+    expect(sprites.every((args) => args[0] === OFFICE_IMAGE)).toBe(true);
+
+    handle.stop();
+  });
+
+  it("keeps drawing generated sprites for a theme whose image has not resolved yet, without blocking the other theme", () => {
+    const { runtimeLayout, scene } = buildTwoThemeScene();
+    const { factory } = createStubCanvasFactory();
+    const { canvas, drawImageCalls } = createMainCanvasStub();
+    const raf = createManualRaf();
+    const ctl = createControllableThemeLoader();
+
+    const handle = startRenderer(canvas, scene, runtimeLayout, {
+      canvasFactory: factory,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+      spriteImageLoader: ctl.loader,
+    });
+
+    handle.setFloor("jutaku-dev-team");
+    raf.pump(0); // rpg のロードを開始するが未解決のまま
+    const sprites = spriteDrawCalls(drawImageCalls);
+    expect(sprites.length).toBeGreaterThan(0);
+    expect(sprites.every((args) => args[0] !== RPG_IMAGE && args[0] !== OFFICE_IMAGE)).toBe(true);
+    expect(ctl.calls).toEqual([SPRITE_SHEET_SRC.rpg]);
 
     handle.stop();
   });

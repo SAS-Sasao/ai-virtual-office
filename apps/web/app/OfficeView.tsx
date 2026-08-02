@@ -48,21 +48,19 @@ function readFastModeFlag(search: string): boolean {
   return new URLSearchParams(search).get("e2e") === "1";
 }
 
-/** キャラクタースプライトシート（ADR-005・自作オフィス PNG）の静的配信パス。 */
-const OFFICE_SPRITE_URL = "/assets/characters/office.png";
-
 /**
  * 本番のスプライトシート画像ローダ（renderer へ opt-in で注入する）。
  * `new Image()`/DOM への依存はこの React 側（OfficeView）に閉じ込め、game/ 層には
- * 持ち込まない（NFR-7 = game/ 非依存維持）。ロード完了で `<img>` を解決し、失敗時は
- * reject する（renderer 側は reject を生成スプライト据え置きとして扱う）。
+ * 持ち込まない（NFR-7 = game/ 非依存維持）。renderer が渡す `src`（org のテーマ別
+ * PNG パス。M2-1c・`SPRITE_SHEET_SRC`）をロードし、成功で `<img>` を解決、失敗で
+ * reject する（renderer 側は reject をそのテーマの生成スプライト据え置きとして扱う）。
  */
-function loadOfficeSpriteImage(): Promise<HTMLImageElement> {
+function loadSpriteImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`failed to load ${OFFICE_SPRITE_URL}`));
-    img.src = OFFICE_SPRITE_URL;
+    img.onerror = () => reject(new Error(`failed to load ${src}`));
+    img.src = src;
   });
 }
 
@@ -191,9 +189,10 @@ export function OfficeView({ initialLayoutMeta }: OfficeViewProps) {
             offscreen.height = height;
             return offscreen;
           },
-          // ADR-005: 自作オフィス PNG スプライトシートを opt-in で注入する。
-          // 未ロード/失敗時は renderer が生成スプライトへフォールバックする。
-          spriteImageLoader: loadOfficeSpriteImage,
+          // ADR-005・M2-1c: 自作 PNG スプライトシート（org のテーマ別。office/rpg）を
+          // opt-in で注入する。未ロード/失敗時は renderer がそのテーマの生成スプライトへ
+          // フォールバックする。
+          spriteImageLoader: loadSpriteImage,
           // ADR-006: フロア backdrop（一枚絵背景）を opt-in で注入する。
           // 未ロード/失敗時は renderer が単色 z0 へフォールバックする。
           backdropImageLoader: loadBackdropImage,
