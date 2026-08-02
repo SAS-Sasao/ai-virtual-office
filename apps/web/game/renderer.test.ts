@@ -6,7 +6,7 @@ import type { OfficeEvent } from "@ai-office/protocol";
 import { OfficeState } from "./office-state";
 import { buildRuntimeLayout } from "./layout-runtime";
 import { Scene } from "./scene";
-import { cellFor, startRenderer } from "./renderer";
+import { CELL_BBOX, cellFor, startRenderer } from "./renderer";
 import type { CanvasFactory, DrawableCanvas, SpriteSourceImage } from "./sprites";
 import { REAL_SHAPE_CHARACTERS, REAL_SHAPE_FLOOR } from "./fixtures/real-layout-fixture";
 
@@ -400,9 +400,14 @@ describe("startRenderer: focus ring / sub label / hover card (M1-4b AC-4/AC-6)",
   });
 });
 
-describe("cellFor (M2-1 AC-3): every roster role/dept maps to a valid sheet cell", () => {
+describe("cellFor (M2-1 AC-3 / M2-1b): every roster role/dept maps to a valid sheet cell", () => {
+  // マクロセル（4 列 x 2 行 x 384x512）の外枠。M2-1b でタイトな bbox（実測値）に
+  // 差し替えたため sw/sh は 384/512 固定ではなくなったが、各セルは対応する
+  // マクロセル（col 0-3 x row 0-1）の枠内に収まっているはずである。
   const SW = 384;
   const SH = 512;
+  const SHEET_W = 1536;
+  const SHEET_H = 1024;
   // AC-3 で列挙された 8 dept（col 0-3 x row 0-1 の 8 セルへ決定的に割当）。
   const ENUMERATED_DEPTS = [
     "dept-architecture",
@@ -417,19 +422,29 @@ describe("cellFor (M2-1 AC-3): every roster role/dept maps to a valid sheet cell
 
   function assertValidCell(role: string, dept: string): void {
     const cell = cellFor(role, dept);
-    expect(cell.sw).toBe(SW);
-    expect(cell.sh).toBe(SH);
-    const col = cell.sx / SW;
-    const row = cell.sy / SH;
-    expect(Number.isInteger(col)).toBe(true);
-    expect(Number.isInteger(row)).toBe(true);
+    // M2-1b: タイトな bbox（マクロセルの余白込み矩形より必ず小さい = 切り抜きが甘い
+    // 問題の回帰防止）。
+    expect(cell.sw).toBeLessThan(SW);
+    expect(cell.sh).toBeLessThan(SH);
+    expect(cell.sw).toBeGreaterThan(0);
+    expect(cell.sh).toBeGreaterThan(0);
+    // シート境界内に収まっている
+    expect(cell.sx).toBeGreaterThanOrEqual(0);
+    expect(cell.sy).toBeGreaterThanOrEqual(0);
+    expect(cell.sx + cell.sw).toBeLessThanOrEqual(SHEET_W);
+    expect(cell.sy + cell.sh).toBeLessThanOrEqual(SHEET_H);
+    // 対応するマクロセル（col 0-3 x row 0-1・384x512）の枠内に収まっている
+    const col = Math.floor(cell.sx / SW);
+    const row = Math.floor(cell.sy / SH);
     expect(col).toBeGreaterThanOrEqual(0);
     expect(col).toBeLessThanOrEqual(3);
     expect(row).toBeGreaterThanOrEqual(0);
     expect(row).toBeLessThanOrEqual(1);
+    expect(cell.sx + cell.sw).toBeLessThanOrEqual((col + 1) * SW);
+    expect(cell.sy + cell.sh).toBeLessThanOrEqual((row + 1) * SH);
   }
 
-  it("maps all enumerated depts to col 0-3 / row 0-1", () => {
+  it("maps all enumerated depts to col 0-3 / row 0-1 with a tight bbox", () => {
     for (const dept of ENUMERATED_DEPTS) assertValidCell("any-role", dept);
   });
 
@@ -453,6 +468,83 @@ describe("cellFor (M2-1 AC-3): every roster role/dept maps to a valid sheet cell
       : ENUMERATED_DEPTS.map((dept) => ({ role: "roster-role", dept }));
     expect(entries.length).toBeGreaterThan(0);
     for (const { role, dept } of entries) assertValidCell(role, dept);
+  });
+
+  // M2-1b 純増: シート上の 8 セルすべて（index0-7）が、マクロセル全体（384x512）
+  // より必ず小さいタイトな bbox で、かつ実測値表（診断メモ）どおりの矩形を返す
+  // （切り抜き精度の直接検証。index7 は現行 DEPT_CELL_INDEX に未割当＝cellFor から
+  // は到達できないため、テーブル自体（CELL_BBOX）を直接検証して 8 index 全数を網羅する）。
+  it("holds the exact measured tight bbox for every one of the 8 sheet cells (M2-1b)", () => {
+    const EXPECTED_BBOX = [
+      { sx: 80, sy: 45, sw: 232, sh: 442 }, // index0
+      { sx: 452, sy: 52, sw: 257, sh: 435 }, // index1
+      { sx: 818, sy: 55, sw: 281, sh: 432 }, // index2
+      { sx: 1205, sy: 46, sw: 233, sh: 441 }, // index3
+      { sx: 69, sy: 526, sw: 278, sh: 440 }, // index4
+      { sx: 449, sy: 526, sw: 226, sh: 440 }, // index5
+      { sx: 805, sy: 526, sw: 211, sh: 440 }, // index6
+      { sx: 1163, sy: 538, sw: 239, sh: 427 }, // index7
+    ];
+    expect(CELL_BBOX).toHaveLength(8);
+    EXPECTED_BBOX.forEach((expected, index) => {
+      expect(CELL_BBOX[index]).toEqual(expected);
+      expect(CELL_BBOX[index].sw).toBeLessThan(SW);
+      expect(CELL_BBOX[index].sh).toBeLessThan(SH);
+    });
+  });
+
+  it("index7 (currently unmapped by any dept) is still a well-formed cell within the sheet", () => {
+    // dept 経由では到達できない予約枠だが、bbox 自体は他の 7 セルと同じ制約を満たす。
+    const cell = CELL_BBOX[7];
+    expect(cell.sx + cell.sw).toBeLessThanOrEqual(SHEET_W);
+    expect(cell.sy + cell.sh).toBeLessThanOrEqual(SHEET_H);
+    const col = Math.floor(cell.sx / SW);
+    const row = Math.floor(cell.sy / SH);
+    expect(col).toBe(3);
+    expect(row).toBe(1);
+  });
+});
+
+describe("sprite anchor math (M2-1b): foot(bottom-center)-anchored placement", () => {
+  // renderer.ts の draw ループと同じ計算式を、tileSize/frame アスペクト比を
+  // 変えながら直接検証する（描画不具合③「配置がおかしい」の回帰防止・純増）。
+  // dx = footX - drawW/2, dy = footY - drawH, drawW = drawH * (frameWidth/frameHeight)
+  function computeAnchor(tileX: number, tileY: number, tileSize: number, heightTiles: number, frameW: number, frameH: number) {
+    const screenX = tileX * tileSize;
+    const screenY = tileY * tileSize;
+    const drawH = tileSize * heightTiles;
+    const drawW = drawH * (frameW / frameH);
+    const footX = screenX + tileSize / 2;
+    const footY = screenY + tileSize;
+    const dx = footX - drawW / 2;
+    const dy = footY - drawH;
+    return { footX, footY, dx, dy, drawW, drawH };
+  }
+
+  it("centers the sprite horizontally on the tile (dx + drawW/2 === tile center)", () => {
+    const { dx, drawW, footX } = computeAnchor(3, 5, 32, 2.4, 232, 442);
+    expect(dx + drawW / 2).toBeCloseTo(footX, 5);
+    expect(footX).toBe(3 * 32 + 32 / 2);
+  });
+
+  it("plants the sprite's bottom edge exactly at the tile's bottom edge (dy + drawH === footY)", () => {
+    const { dy, drawH, footY } = computeAnchor(3, 5, 32, 2.4, 232, 442);
+    expect(dy + drawH).toBeCloseTo(footY, 5);
+    expect(footY).toBe(5 * 32 + 32);
+  });
+
+  it("draws taller than one tile (bigger than the old fixed SPRITE_SIZE_PX=24) for a typical tileSize", () => {
+    const { drawH } = computeAnchor(0, 0, 32, 2.4, 232, 442);
+    expect(drawH).toBeGreaterThan(32); // 1 タイルより明確に大きい（①「小さい」の回帰防止）
+    expect(drawH).toBe(32 * 2.4);
+  });
+
+  it("derives drawW from the sheet's own frame aspect ratio (works for both tight PNG bbox and generated frames)", () => {
+    const png = computeAnchor(0, 0, 32, 2.4, 232, 442); // PNG index0 の実測 bbox 比
+    const generated = computeAnchor(0, 0, 32, 2.4, 20, 28); // generated アトラスのフレーム比
+    expect(png.drawW).toBeCloseTo(png.drawH * (232 / 442), 5);
+    expect(generated.drawW).toBeCloseTo(generated.drawH * (20 / 28), 5);
+    expect(png.drawW).not.toBeCloseTo(generated.drawW, 1);
   });
 });
 

@@ -6,3 +6,4 @@
 - [Node test env has no DOM (feedback)](feedback_node_test_env_no_dom_di.md) — canvas/rAF/document must be injected in game/, never defaulted to a bare global reference call
 - [Connectivity interior-anchor fix (M1-4a Phase 3)](project_m1_4a_connectivity_interior_anchor.md) — door-reachable ≠ interior-reachable (corner-door bug); one-time approved exception to touch packages/cc-sier-adapter
 - [fastMode masks slow-mode bugs (feedback)](feedback_fastmode_masks_slowmode_bugs.md) — always add a fastMode:false regression test for multi-tick walk bugs; fast-mode's synchronous arrive() can make production-only bugs structurally untestable
+- [M2-1b visual fix: bbox + foot-anchor (project)](project_m2_1b_visual_fix_anchor_bbox.md) — CELL_BBOX tight-crop table, foot-anchor draw formula, sheet.draw() size-param must stay proportional to frameWidth/frameHeight, DEPT_CELL_INDEX only reaches 7 of 8 cells

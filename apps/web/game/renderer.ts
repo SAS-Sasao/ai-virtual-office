@@ -90,7 +90,19 @@ const CARD_MARGIN_PX = 6;
 const WAITING_BLINK_PERIOD_MS = 500;
 const BOB_PERIOD_MS = 2600;
 const BOB_AMPLITUDE_PX = 2;
-const SPRITE_SIZE_PX = 24;
+
+// M2-1b: 視覚不具合修正（①小さい ②切り抜きが甘い ③配置がおかしい）。
+// スプライトの描画高さ（タイル単位）。幅はシートのフレームアスペクト
+// （PNG=cellFor の実測 bbox 比・generated=BASE_PIXEL_MAP 比）から自動算出する。
+// **見た目の大きさ調整はこの定数だけで完結する**（:3001 目視での微調整用）。
+const SPRITE_HEIGHT_TILES = 2.4;
+
+// 足元(bottom-center)アンカーで固定されるオーバーレイのオフセット定数
+// （全て :3001 目視での微調整用に名前付き）。
+const BUBBLE_HEIGHT_PX = 12; // 状態吹き出し矩形の高さ（旧実装から流用）
+const BUBBLE_GAP_PX = 4; // 吹き出し下端とスプライト上端(dy)の間隔
+const NAME_GAP_PX = 2; // 名前ラベルのベースラインとスプライト足元(footY)の間隔
+const OVERLAY_CHAR_WIDTH_PX = 6; // 9px monospace の概算 1 文字幅（中央寄せの幅計算用）
 
 const TICK_DURATION_MS = 90;
 
@@ -119,11 +131,23 @@ function paletteForCharacterId(id: string): CharacterPalette {
   };
 }
 
-// ADR-005: オフィス PNG シート（1536x1024・4 列 x 2 行 = 1 セル 384x512）。
-const SHEET_CELL_W = 384;
-const SHEET_CELL_H = 512;
+// ADR-005: オフィス PNG シート（1536x1024・4 列 x 2 行 = 1 マクロセル 384x512）。
 // 8 セル（col 0-3 x row 0-1）を線形 index 0-7 で扱う。col = index % 4 / row = floor(index / 4)。
-const SHEET_COLS = 4;
+
+// M2-1b: マクロセル全体（384x512）を描くと余白込みで「小さい・切り抜きが甘い」
+// 見た目になっていたため、透過 PNG 化後にアルファ実測した**タイトな bbox**へ
+// index ごとに差し替える（値は M2-1b 診断メモの実測値。各 bbox は対応する
+// マクロセル内に収まる）。フォールバックは index0。
+export const CELL_BBOX: readonly SpriteCell[] = [
+  { sx: 80, sy: 45, sw: 232, sh: 442 }, // index0
+  { sx: 452, sy: 52, sw: 257, sh: 435 }, // index1
+  { sx: 818, sy: 55, sw: 281, sh: 432 }, // index2
+  { sx: 1205, sy: 46, sw: 233, sh: 441 }, // index3
+  { sx: 69, sy: 526, sw: 278, sh: 440 }, // index4
+  { sx: 449, sy: 526, sw: 226, sh: 440 }, // index5
+  { sx: 805, sy: 526, sw: 211, sh: 440 }, // index6
+  { sx: 1163, sy: 538, sw: 239, sh: 427 }, // index7
+];
 
 // dept 起点の決定的セル割当（8 セル < 15 ロールのため複数ロールがセルを共有する。
 // 決定的であればよい＝制服的表現）。未登録 dept は既定 = engineer(0) にフォールバックする。
@@ -140,16 +164,14 @@ const DEPT_CELL_INDEX: Record<string, number> = {
 const DEFAULT_CELL_INDEX = 0; // engineer
 
 /**
- * ロール/部署から PNG シート内のソース矩形を決定的に返す（ADR-005・M2-1・AC-3）。
- * 割当は dept 起点で、未登録 dept は engineer(0) にフォールバックするため
- * **全ロースタが有効セル（col 0-3・row 0-1）に落ちる**（取りこぼしゼロ）。
+ * ロール/部署から PNG シート内のソース矩形（タイトな bbox）を決定的に返す
+ * （ADR-005・M2-1・M2-1b・AC-3）。割当は dept 起点で、未登録 dept は engineer(0)
+ * にフォールバックするため**全ロースタが有効セルに落ちる**（取りこぼしゼロ）。
  */
 export function cellFor(role: string, dept: string): SpriteCell {
   void role; // 現サイクルは dept 起点の割当（role はシグネチャの拡張余地として受ける）
   const index = dept in DEPT_CELL_INDEX ? DEPT_CELL_INDEX[dept] : DEFAULT_CELL_INDEX;
-  const col = index % SHEET_COLS;
-  const row = Math.floor(index / SHEET_COLS);
-  return { sx: col * SHEET_CELL_W, sy: row * SHEET_CELL_H, sw: SHEET_CELL_W, sh: SHEET_CELL_H };
+  return CELL_BBOX[index] ?? CELL_BBOX[DEFAULT_CELL_INDEX];
 }
 
 function poseFor(character: RuntimeCharacter, now: number, fastMode: boolean): SpritePose {
@@ -313,26 +335,38 @@ export function startRenderer(
       const pose = character.state === "idle" ? seatedOrIdlePose(character) : poseFor(character, now, fastMode);
       const direction: SpriteDirection = character.direction;
 
+      // M2-1b: 足元(bottom-center)アンカー。タイルの水平中央・下端に足が接地する
+      // よう描く（大きさは SPRITE_HEIGHT_TILES・接地位置はこのアンカー式で決まる。
+      // 幅はシートのフレームアスペクトから自動算出するため PNG/generated 両対応）。
+      const drawH = tileSize * SPRITE_HEIGHT_TILES;
+      const drawW = drawH * (sheet.frameWidth / sheet.frameHeight);
+      const footX = screenX + tileSize / 2;
+      const footY = screenY + tileSize;
+      const dx = footX - drawW / 2;
+      const dy = footY - drawH;
+
       let alpha = 1;
       if (character.state === "waiting" && !fastMode) {
         const phase = Math.floor(now / WAITING_BLINK_PERIOD_MS) % 2;
         alpha = phase === 0 ? 1 : 0.4;
       }
       ctx.globalAlpha = alpha;
-      sheet.draw(ctx, direction, pose, screenX, screenY, SPRITE_SIZE_PX);
+      sheet.draw(ctx, direction, pose, dx, dy, drawW);
       ctx.globalAlpha = 1;
 
-      // z4: オーバーレイ（名前・状態の吹き出し。idle/walk は吹き出し無し）
-      drawOverlay(ctx, character, screenX, screenY);
+      // z4: オーバーレイ（名前・状態の吹き出し。idle/walk は吹き出し無し。M2-1b:
+      // タイル左上ではなくスプライトの実描画範囲（頭上中央/足元）に追従させる）
+      drawOverlay(ctx, character, footX, dy, footY);
 
       // z4: subagent の "sub" 小ラベル（M1-4b）
       if (character.kind === "sub") {
-        drawSubLabel(ctx, screenX, screenY, tileSize);
+        drawSubLabel(ctx, footX, footY);
       }
 
-      // z4: フォーカスリング（セッション一覧クリック → focusSessionId、M1-4b）
+      // z4: フォーカスリング（セッション一覧クリック → focusSessionId、M1-4b。
+      // M2-1b: タイル全体ではなくスプライトの実描画 bbox を囲む）
       if (focusedSessionId !== null && character.sessionId === focusedSessionId) {
-        drawFocusRing(ctx, screenX, screenY, tileSize);
+        drawFocusRing(ctx, dx, dy, drawW, drawH);
       }
     }
 
@@ -376,54 +410,74 @@ function seatedOrIdlePose(character: RuntimeCharacter): SpritePose {
   return character.sessionId ? "seated" : "idle";
 }
 
-function drawOverlay(ctx: CanvasRenderingContext2D, character: RuntimeCharacter, x: number, y: number): void {
+/**
+ * z4 オーバーレイ（M2-1b: タイル左上ではなくスプライトの実描画範囲に追従させる）。
+ * `centerX` はスプライトの水平中心（footX）、`topY` はスプライト上端（dy）、
+ * `footY` は接地点（tile 下端）。吹き出しは頭上中央、名前は足元中央下に描く。
+ */
+function drawOverlay(
+  ctx: CanvasRenderingContext2D,
+  character: RuntimeCharacter,
+  centerX: number,
+  topY: number,
+  footY: number,
+): void {
   if (character.state === "idle" || character.state === "walk") {
     return; // README 抽出仕様 2: idle は吹き出し無し。walk も移動中は非表示にする
   }
   const color = STATE_COLORS[character.state];
+  const label = character.state;
+  const boxWidth = label.length * OVERLAY_CHAR_WIDTH_PX + 8;
+  const boxX = centerX - boxWidth / 2;
+  const boxY = topY - BUBBLE_GAP_PX - BUBBLE_HEIGHT_PX;
   ctx.fillStyle = "#12152a";
   ctx.strokeStyle = color;
   ctx.lineWidth = 1;
-  const label = character.state;
-  const boxWidth = label.length * 6 + 8;
-  ctx.fillRect(x, y - 16, boxWidth, 12);
-  ctx.strokeRect(x, y - 16, boxWidth, 12);
+  ctx.fillRect(boxX, boxY, boxWidth, BUBBLE_HEIGHT_PX);
+  ctx.strokeRect(boxX, boxY, boxWidth, BUBBLE_HEIGHT_PX);
   ctx.fillStyle = color;
   ctx.font = "9px monospace";
   ctx.textAlign = "left";
-  ctx.fillText(label, x + 4, y - 7);
+  ctx.fillText(label, boxX + 4, boxY + BUBBLE_HEIGHT_PX - 3);
 
   if (character.name) {
     ctx.fillStyle = TEXT_PRIMARY;
     ctx.font = "9px monospace";
-    ctx.fillText(character.name, x, y + 30);
+    ctx.textAlign = "left";
+    const nameWidth = character.name.length * OVERLAY_CHAR_WIDTH_PX;
+    ctx.fillText(character.name, centerX - nameWidth / 2, footY + NAME_GAP_PX);
   }
 }
 
-/** subagent（kind: "sub"）を示す小ラベル（M1-4b・scene.ts のファイル冒頭コメント参照）。 */
-function drawSubLabel(ctx: CanvasRenderingContext2D, x: number, y: number, tileSize: number): void {
+/**
+ * subagent（kind: "sub"）を示す小ラベル（M1-4b・scene.ts のファイル冒頭コメント参照）。
+ * M2-1b: `footX`/`footY`（スプライトの接地点）中央に追従させる。
+ */
+function drawSubLabel(ctx: CanvasRenderingContext2D, footX: number, footY: number): void {
   const label = "sub";
-  const boxWidth = label.length * 6 + 6;
-  const boxY = y + tileSize - 4;
+  const boxWidth = label.length * OVERLAY_CHAR_WIDTH_PX + 6;
+  const boxX = footX - boxWidth / 2;
+  const boxY = footY - 4;
   ctx.fillStyle = CARD_BG_COLOR;
   ctx.strokeStyle = SUB_LABEL_TEXT_COLOR;
   ctx.lineWidth = 1;
-  ctx.fillRect(x, boxY, boxWidth, 10);
-  ctx.strokeRect(x, boxY, boxWidth, 10);
+  ctx.fillRect(boxX, boxY, boxWidth, 10);
+  ctx.strokeRect(boxX, boxY, boxWidth, 10);
   ctx.fillStyle = SUB_LABEL_TEXT_COLOR;
   ctx.font = "8px monospace";
   ctx.textAlign = "left";
-  ctx.fillText(label, x + 3, boxY + 8);
+  ctx.fillText(label, boxX + 3, boxY + 8);
 }
 
 /**
  * フォーカスリング（docs/design/ui/README.md 抽出仕様 2: `3px solid #ffd166` /
  * offset 2px。角丸なしの pixel-art トークンに合わせ矩形で描く）。
+ * M2-1b: タイル全体ではなく、スプライトの実描画 bbox（`dx,dy,w,h`）を囲む。
  */
-function drawFocusRing(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
+function drawFocusRing(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number): void {
   ctx.strokeStyle = FOCUS_RING_COLOR;
   ctx.lineWidth = 3;
-  ctx.strokeRect(x - 2, y - 2, size + 4, size + 4);
+  ctx.strokeRect(x - 2, y - 2, w + 4, h + 4);
 }
 
 /**
