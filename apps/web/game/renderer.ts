@@ -270,20 +270,21 @@ function buildFloorLayer(
 
   const tileSize = floor.grid.tileSize;
 
-  // z0: backdrop。画像ロード済みなら **アスペクト比を保って contain（全体が収まるよう
-  // 縮小）** し中央寄せで敷く（ADR-006 rev: 旧「全面拡大で歪み許容」→ 歪ませず全体表示。
-  // フロアごとにキャンバスのアスペクトが違う（例: 受託開発フロアは 960x896 の縦長）ため、
-  // 全面拡大だと横長の部屋アートが歪み・入口が見切れる。contain なら部屋全体が 100% の
-  // プロポーションで映り、余白はフロア基調色でレターボックスする）。未ロード/未注入時は単色。
+  // z0: backdrop。画像ロード済みなら **アスペクト比を保って cover（キャンバス全面を覆う
+  // よう拡大）** し中央寄せで敷く（`background-size: cover` 相当。ADR-006 rev2）。
+  // フロアごとにキャンバスのアスペクトが違う（例: 受託開発フロアは 960x896 の縦長）。
+  // 旧「全面拡大(stretch)」は歪み、「contain」は余白帯にキャラが浮く不具合が出た。cover
+  // なら**歪まず・余白ゼロで全キャラが背景の上に乗る**（代償: アートの外周がキャンバス外へ
+  // 少し見切れる）。未ロード/未注入時は単色（キャンバスクリップで余白は塗り潰される）。
   ctx.fillStyle = BACKGROUND_COLOR;
   ctx.fillRect(0, 0, width, height);
   if (backdropImage) {
     const artW = backdropImage.width;
     const artH = backdropImage.height;
-    const scale = artW > 0 && artH > 0 ? Math.min(width / artW, height / artH) : 1;
+    const scale = artW > 0 && artH > 0 ? Math.max(width / artW, height / artH) : 1;
     const drawW = artW * scale;
     const drawH = artH * scale;
-    const dx = (width - drawW) / 2;
+    const dx = (width - drawW) / 2; // cover: 負値になり得る（はみ出しをクリップ）
     const dy = (height - drawH) / 2;
     ctx.drawImage(backdropImage as unknown as CanvasImageSource, dx, dy, drawW, drawH);
   }
