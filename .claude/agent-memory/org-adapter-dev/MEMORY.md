@@ -1,3 +1,4 @@
 - [masters format variance](masters_format_variance.md) — roles.md のキー名ゆらぎ（部署/所属部署、モデル/model）と subagent_type の組織間衝突（secretary 等）
 - [adapter layout algorithm](adapter_layout_algorithm.md) — レイアウト具体定数・M1-4a 連結性保証（廊下レーン/door/BFS 不変条件）・3組織実測・fixtures 拡充
 - [typecheck hook and TDD](typecheck_hook_and_tdd.md) — typecheck-touched hook はパッケージ単位発火（無関係ファイル編集でも既存エラーで鳴る、Write自体は反映される）と `*/` コメント閉じ忘れの罠
+- [M2-3 selfobserve org](project_m2_3_selfobserve_org.md) — ai-virtual-office 自身を4org目として.companies/方式で観測org化。--repo省略必須・.active必須・verify.shのpnpm -r buildは無害だった実測
