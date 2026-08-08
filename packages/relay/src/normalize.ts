@@ -18,6 +18,14 @@ const EVENT_TYPE_MAP: Record<string, OfficeEvent["type"]> = {
 /**
  * ファイルパスからベース名のみを取り出す。'/' と '\\' の両方の区切り文字に対応する。
  * ディレクトリ名・絶対パス等の機微情報を残さないための処理（NFR-4）。
+ *
+ * AC-8 defense-in-depth: ベース名確定後、残り得る `?query` / `#fragment` を
+ * 切り落とす（`file_path` は本来 URL ではないが、ツールによってはクエリ文字列
+ * 相当のものが紛れ込む可能性があるため NFR-4「URL クエリ破棄」を優先する）。
+ * strip した結果が空文字になる場合（例: ベース名が `?x=1` のように `?`/`#` から
+ * 始まる場合）は strip 前の base にフォールバックする —
+ * 正当なファイル名を空文字に落とさないため。POSIX では `?`/`#` はファイル名の
+ * 合法な文字だが、この稀なトレードオフより NFR-4 の防御を優先して受容する。
  */
 function toFileBase(filePath: unknown): string | undefined {
   if (typeof filePath !== "string" || filePath.length === 0) {
@@ -25,7 +33,11 @@ function toFileBase(filePath: unknown): string | undefined {
   }
   const segments = filePath.split(/[\\/]/);
   const base = segments[segments.length - 1];
-  return base.length > 0 ? base : undefined;
+  if (base.length === 0) {
+    return undefined;
+  }
+  const stripped = base.split(/[?#]/)[0];
+  return stripped.length > 0 ? stripped : base;
 }
 
 /**
@@ -82,5 +94,16 @@ export function normalizeHookEvent(raw: unknown, now: number): OfficeEvent | nul
     ...(subagentType !== undefined ? { subagentType } : {}),
   };
 
-  return OfficeEventSchema.parse(candidate);
+  // AC-7 defense-in-depth: candidate はここまでの検証済みフィールドから構築して
+  // おり、現状は常に OfficeEventSchema を満たす（= この分岐は理論上到達しない）。
+  // それでも `.parse` ではなく `.safeParse` を使うのは、呼び出し元
+  // （server.ts の /hooks/:event ハンドラ）が try/catch の外でこの関数を呼ぶため、
+  // 将来の変更で candidate が invalid になり得た場合に throw が NFR-2（hooks は
+  // 絶対にブロックしない）を破ってしまう事故を未然に防ぐため。失敗は null を
+  // 返す契約に統一する（呼び出し元は既存どおり null を「無視」として扱う）。
+  const result = OfficeEventSchema.safeParse(candidate);
+  if (!result.success) {
+    return null;
+  }
+  return result.data;
 }

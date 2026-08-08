@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { OfficeEventSchema } from "@ai-office/protocol";
 import { normalizeHookEvent } from "./normalize.js";
 
 const NOW = 1_700_000_000_000;
@@ -167,6 +168,113 @@ describe("normalizeHookEvent", () => {
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain("secret");
     expect(serialized).not.toContain("Users");
+  });
+
+  it("file_path の ?query は fileBase から除去される（AC-8, NFR-4 defense-in-depth）", () => {
+    const raw = {
+      hook_event_name: "PreToolUse",
+      session_id: "session-abc",
+      tool_name: "Edit",
+      tool_input: {
+        file_path: "/home/user/secret/project/foo.ts?token=secret",
+      },
+    };
+
+    const result = normalizeHookEvent(raw, NOW);
+
+    expect(result?.fileBase).toBe("foo.ts");
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("token");
+    expect(serialized).not.toContain("secret");
+  });
+
+  it("file_path の #fragment は fileBase から除去される（AC-8, NFR-4 defense-in-depth）", () => {
+    const raw = {
+      hook_event_name: "PreToolUse",
+      session_id: "session-abc",
+      tool_name: "Edit",
+      tool_input: {
+        file_path: "/home/user/project/bar.ts#fragment",
+      },
+    };
+
+    const result = normalizeHookEvent(raw, NOW);
+
+    expect(result?.fileBase).toBe("bar.ts");
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("fragment");
+  });
+
+  it("file_path の ?query と #fragment が両方あっても最初の区切りで切り落とされる（AC-8）", () => {
+    const raw = {
+      hook_event_name: "PreToolUse",
+      session_id: "session-abc",
+      tool_name: "Edit",
+      tool_input: {
+        file_path: "/home/user/project/baz.ts?a=1#section",
+      },
+    };
+
+    const result = normalizeHookEvent(raw, NOW);
+
+    expect(result?.fileBase).toBe("baz.ts");
+  });
+
+  it("ベース名が '?' で始まり strip すると空文字になる場合は strip 前の base にフォールバックする（AC-8）", () => {
+    const raw = {
+      hook_event_name: "PreToolUse",
+      session_id: "session-abc",
+      tool_name: "Edit",
+      tool_input: {
+        file_path: "/home/user/project/?x=1",
+      },
+    };
+
+    const result = normalizeHookEvent(raw, NOW);
+
+    // strip すると空文字になってしまうため、strip 前の base（'?x=1'）を採用する
+    // （NFR-4 優先で POSIX 上合法なファイル名が切られるトレードオフを受容する）。
+    expect(result?.fileBase).toBe("?x=1");
+  });
+
+  it("ベース名が '#' で始まり strip すると空文字になる場合は strip 前の base にフォールバックする（AC-8）", () => {
+    const raw = {
+      hook_event_name: "PreToolUse",
+      session_id: "session-abc",
+      tool_name: "Edit",
+      tool_input: {
+        file_path: "/home/user/project/#anchor",
+      },
+    };
+
+    const result = normalizeHookEvent(raw, NOW);
+
+    expect(result?.fileBase).toBe("#anchor");
+  });
+
+  it("safeParse 経由でも代表的な入力の正規化結果は常に OfficeEventSchema を満たす（AC-7 defense-in-depth: candidate は常に valid）", () => {
+    const cases: unknown[] = [
+      { hook_event_name: "SessionStart", session_id: "s1" },
+      {
+        hook_event_name: "PreToolUse",
+        session_id: "s2",
+        tool_name: "Edit",
+        tool_input: { file_path: "/a/b/c.ts?x=1#y" },
+      },
+      {
+        hook_event_name: "PreToolUse",
+        session_id: "s3",
+        tool_name: "Task",
+        tool_input: { subagent_type: "tech-researcher" },
+      },
+      { hook_event_name: "SessionEnd", session_id: "s4" },
+    ];
+
+    for (const raw of cases) {
+      const result = normalizeHookEvent(raw, NOW);
+      expect(result).not.toBeNull();
+      expect(OfficeEventSchema.safeParse(result).success).toBe(true);
+    }
   });
 
   it("tool_input がない PostToolUse でも安全に null 系フィールドなしで正規化できる", () => {
