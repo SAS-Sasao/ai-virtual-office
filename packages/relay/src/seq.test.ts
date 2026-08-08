@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  createFsSeqStateIO,
   createPersistentSeqCounter,
   createSeqCounter,
   resolveSeqPath,
   type SeqStateIO,
+  type SeqWriteFsFacade,
 } from "./seq.js";
 
 describe("createSeqCounter", () => {
@@ -46,6 +48,130 @@ describe("resolveSeqPath", () => {
   });
 });
 
+describe("createFsSeqStateIO (fs facade DI — AC-1/AC-2)", () => {
+  let dir: string;
+  let filePath: string;
+
+  beforeEach(() => {
+    // NFR-2 / 本番非破壊: 必ず mkdtemp 配下のみを使い、~/.ai-office/ には一切触れない。
+    dir = mkdtempSync(join(tmpdir(), "ai-office-relay-seq-fsio-test-"));
+    filePath = join(dir, "relay-seq.json");
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  /**
+   * 呼び出し順序を記録するだけの偽 fs ファサード。実際のディスク I/O は
+   * 一切行わないため、「tmp write → fsync → rename」という契約自体を
+   * `writeState` の実装（`createFsSeqStateIO` の高位シームではなく低位の
+   * fs facade）で検証できる（rev.1 review F1 対応）。
+   */
+  function makeFakeFacade(overrides: Partial<SeqWriteFsFacade> = {}) {
+    const calls: string[] = [];
+    let nextFd = 1;
+    const facade: SeqWriteFsFacade = {
+      mkdirSync: vi.fn((...args) => {
+        calls.push("mkdirSync");
+        return undefined as unknown as ReturnType<typeof import("node:fs").mkdirSync>;
+      }) as unknown as SeqWriteFsFacade["mkdirSync"],
+      openSync: vi.fn(() => {
+        calls.push("openSync");
+        return nextFd++;
+      }) as unknown as SeqWriteFsFacade["openSync"],
+      writeSync: vi.fn(() => {
+        calls.push("writeSync");
+        return 0;
+      }) as unknown as SeqWriteFsFacade["writeSync"],
+      fsyncSync: vi.fn(() => {
+        calls.push("fsyncSync");
+      }) as unknown as SeqWriteFsFacade["fsyncSync"],
+      closeSync: vi.fn(() => {
+        calls.push("closeSync");
+      }) as unknown as SeqWriteFsFacade["closeSync"],
+      renameSync: vi.fn(() => {
+        calls.push("renameSync");
+      }) as unknown as SeqWriteFsFacade["renameSync"],
+      unlinkSync: vi.fn(() => {
+        calls.push("unlinkSync");
+      }) as unknown as SeqWriteFsFacade["unlinkSync"],
+      ...overrides,
+    };
+    return { facade, calls };
+  }
+
+  it("writes to a <path>.tmp file, fsyncs it, then atomically renames it over the target path (AC-1)", () => {
+    const { facade, calls } = makeFakeFacade();
+    const io = createFsSeqStateIO(filePath, facade);
+
+    io.writeState({ lastSeq: 42 });
+
+    expect(calls).toEqual(["mkdirSync", "openSync", "writeSync", "fsyncSync", "closeSync", "renameSync"]);
+    expect(facade.openSync).toHaveBeenCalledWith(`${filePath}.tmp`, "w");
+    expect(facade.renameSync).toHaveBeenCalledWith(`${filePath}.tmp`, filePath);
+  });
+
+  it("fsyncs the written fd before the atomic rename (best-effort durability, AC-2)", () => {
+    const { facade, calls } = makeFakeFacade();
+    const io = createFsSeqStateIO(filePath, facade);
+
+    io.writeState({ lastSeq: 1 });
+
+    const fsyncIndex = calls.indexOf("fsyncSync");
+    const renameIndex = calls.indexOf("renameSync");
+    expect(fsyncIndex).toBeGreaterThanOrEqual(0);
+    expect(fsyncIndex).toBeLessThan(renameIndex);
+  });
+
+  it("cleans up the .tmp file and rethrows when rename fails, leaving the original path untouched (AC-1)", () => {
+    const { facade, calls } = makeFakeFacade({
+      renameSync: vi.fn(() => {
+        calls.push("renameSync");
+        throw new Error("EXDEV: cross-device link not permitted");
+      }) as unknown as SeqWriteFsFacade["renameSync"],
+    });
+    const io = createFsSeqStateIO(filePath, facade);
+
+    expect(() => io.writeState({ lastSeq: 7 })).toThrow("EXDEV");
+    expect(calls).toEqual([
+      "mkdirSync",
+      "openSync",
+      "writeSync",
+      "fsyncSync",
+      "closeSync",
+      "renameSync",
+      "unlinkSync",
+    ]);
+    expect(facade.unlinkSync).toHaveBeenCalledWith(`${filePath}.tmp`);
+    // the target path itself was never touched by this facade.
+    expect(facade.writeSync).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not mask the original rename error if the unlink cleanup itself fails", () => {
+    const { facade } = makeFakeFacade({
+      renameSync: vi.fn(() => {
+        throw new Error("rename failed");
+      }) as unknown as SeqWriteFsFacade["renameSync"],
+      unlinkSync: vi.fn(() => {
+        throw new Error("unlink also failed");
+      }) as unknown as SeqWriteFsFacade["unlinkSync"],
+    });
+    const io = createFsSeqStateIO(filePath, facade);
+
+    expect(() => io.writeState({ lastSeq: 1 })).toThrow("rename failed");
+  });
+
+  it("uses real node:fs by default: persists state atomically and leaves no leftover .tmp file (integration smoke)", () => {
+    const io = createFsSeqStateIO(filePath);
+
+    io.writeState({ lastSeq: 99 });
+
+    expect(JSON.parse(readFileSync(filePath, "utf8"))).toEqual({ lastSeq: 99 });
+    expect(existsSync(`${filePath}.tmp`)).toBe(false);
+  });
+});
+
 describe("createPersistentSeqCounter", () => {
   let dir: string;
   let filePath: string;
@@ -58,6 +184,26 @@ describe("createPersistentSeqCounter", () => {
 
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
+  });
+
+  describe("blockSize validation (AC-3)", () => {
+    it.each([0, -1, 1.5, -100.25, NaN])(
+      "throws at construction time when blockSize=%s is not a positive integer",
+      (blockSize) => {
+        expect(() => createPersistentSeqCounter({ path: filePath, blockSize })).toThrow();
+      },
+    );
+
+    it.each([1, 2, 1000])("accepts a valid integer blockSize=%s without throwing", (blockSize) => {
+      expect(() => createPersistentSeqCounter({ path: filePath, blockSize })).not.toThrow();
+    });
+
+    it("still defaults to blockSize=1000 when omitted", () => {
+      const nextSeq = createPersistentSeqCounter({ path: filePath });
+      expect(nextSeq()).toBe(0);
+      const saved = JSON.parse(readFileSync(filePath, "utf8")) as { lastSeq: number };
+      expect(saved).toEqual({ lastSeq: 1000 });
+    });
   });
 
   it("reserves a block of 1000 on the first call and persists it to the state file immediately", () => {
