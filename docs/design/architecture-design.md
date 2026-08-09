@@ -3,6 +3,7 @@
 > 作成日: 2026-07-17 | 作成者: SAS-Sasao（秘書室 direct）| ステータス: draft
 > 更新: 2026-07-20 — フロントモック v3 の取り込みに伴い **§5.1 オフィス描画のレイヤー構成**を新設（[ADR-002](./decision-log.md)）
 > 更新: 2026-07-25 — M1-3 に伴い **§5 のリポジトリ構成**を改訂: 帰属の実行時 lookup を `relay/src/attribute.ts` へ、cc-sier-adapter は `attribution-index.ts`（attribution.json 生成）に（[ADR-003](./decision-log.md) も参照）
+> 更新: 2026-08-09 — **NFR-4 を二層化**（[ADR-007](./decision-log.md)）。機微情報の破棄境界を「Relay 受信時」から「**クラウド転送時（`forward.ts`）**」へ移し、ローカル配信は「作業依頼の本文のみ」を `OfficeEvent` の optional フィールドで保持して吹き出し/ダッシュボードに出す。クラウド転送は本文を strip（ユニットテストで構造保証）。実装は次サイクル
 > 参考: [【pixel-agents-hq/pixel-agents】](https://github.com/pixel-agents-hq/pixel-agents) / [【Zenn: Pixel Agents 紹介記事】](https://zenn.dev/and_dot/articles/d987d07720929430)
 
 ## 1. 目的とスコープ
@@ -132,11 +133,11 @@ ai-virtual-office/
 │   ├── relay/                  ← ローカル常駐 CLI（npx ai-office-relay）
 │   │   └── src/
 │   │       ├── server.ts       ← POST /hooks/:event 受信 + GET /health（観測統計）
-│   │       ├── normalize.ts    ← Claude hooks JSON → OfficeEvent 変換
+│   │       ├── normalize.ts    ← Claude hooks JSON → OfficeEvent 変換（ローカルは依頼文=requestText を保持・ADR-007）
 │   │       ├── attribute.ts    ← 帰属の汎用 lookup（attribution.json を読むだけ。CC-SIer 非依存）
 │   │       ├── seq.ts          ← シーケンス番号の永続採番
 │   │       ├── buffer.ts       ← 再送バッファ
-│   │       └── forward.ts      ← ローカル/クラウドへの転送
+│   │       └── forward.ts      ← 転送。tier-aware: ローカルは本文保持 / クラウドは本文 strip（NFR-4 二層化・ADR-007）
 │   ├── cli/                    ← 設定管理 CLI（npx ai-office setup/doctor/teardown）
 │   │   └── src/                  ※依存ゼロ。Relay（常駐プロセス）とは責務が別
 │   │       ├── merge.ts        ← settings.json への安全マージ・除去（純粋関数）

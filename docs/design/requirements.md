@@ -5,7 +5,7 @@
 | 項目 | 内容 |
 |------|------|
 | ドキュメント種別 | 要件定義書 |
-| バージョン | 0.2.1（§5.4 に開発サイクル Skill /office-develop と office-qa 合格基準を追記） |
+| バージョン | 0.2.2（NFR-4 を二層化: ローカル配信は「作業依頼の本文」を保持し吹き出し/ダッシュボードに表示、破棄境界をクラウド転送時へ移す。[ADR-007](./decision-log.md)） |
 | 作成日 | 2026-07-18 |
 | 開発リポジトリ | `ai-virtual-office`（新規・独立リポジトリ。`/company-spawn` で切り出し） |
 | ベースライン | [【設計ドキュメント 2026-07-17】](./architecture-design.md) / [【pixel-agents】](https://github.com/pixel-agents-hq/pixel-agents) / [【CC-SIer 要件定義 v0.3】](https://github.com/SAS-Sasao/cc-sier-organization/blob/main/docs/requirements.md) |
@@ -145,7 +145,7 @@ hooks イベントの `cwd` / ブランチ名 / subagent_type から「どの部
 | NFR-1 | 性能 | イベント受信 → 画面反映 1 秒以内 / 描画 60fps（キャラ 30 体） |
 | NFR-2 | 信頼性 | hooks の curl は `--max-time 2 \|\| true` とし、**Claude Code の動作を一切ブロックしない**（exit 2 禁止）。Relay 停止中も Claude Code は正常動作 |
 | NFR-3 | 復元性 | イベント欠落があっても状態機械が最終状態に収束する（イベントソーシングではなく「最新状態優先」の設計） |
-| NFR-4 | セキュリティ | ingest エンドポイントは Phase 2 で Bearer トークン必須。イベントに含まれる `tool_input` は**プロンプト本文・ファイル内容を Relay で落とし**、ツール名・ファイルパス程度に絞る（機微情報をクラウドへ送らない） |
+| NFR-4 | セキュリティ | 機微情報を**クラウドへ送らない**（本アプリ最重要制約）。**二層化（[ADR-007](./decision-log.md)）**: ①**ローカル配信経路**（hooks → Relay → ローカル web）は「**作業依頼の本文のみ**」（トップレベル user prompt + サブエージェントへの Task 依頼文）を `OfficeEvent` の optional フィールドで保持し吹き出し/ダッシュボードに出す。ファイル内容・コード片・URL クエリは保持しない ②**クラウド転送経路**（将来 Vercel）は `forward.ts` で本文を**必ず破棄**し `tool_name` / `file_path`（ベース名まで）/ `subagent_type` 程度に絞る。破棄をユニットテストで構造保証。ingest はクラウド公開時に Bearer トークン必須 |
 | NFR-5 | 可搬性 | ローカルは `pnpm dev` + `npx ai-office-relay` の 2 プロセスで完結。Node 20+ / 主要ブラウザ最新版 |
 | NFR-6 | ライセンス | ピクセル素材は CC0 / CC-BY 系のみ。出典を README + 画面フッターに表記 |
 | NFR-7 | 保守性 | `game/` は React 非依存、`protocol` が唯一のスキーマ正本（Zod）。状態機械・正規化はユニットテスト対象 |
@@ -267,7 +267,10 @@ ai-virtual-office/
 | Character | 同上 | 同上 | role ↔ キャラ ↔ スプライトの対応 |
 | 保持期間 | — | イベントはローカル 30 日ローテーション | リプレイ用に日単位エクスポート可 |
 
-**機微情報の扱い（NFR-4 の具体化）**: `tool_input` のうち保存するのは `tool_name` / `file_path`（ベース名まで）/ `subagent_type` のみ。プロンプト本文・ファイル内容・URL クエリは Relay の正規化段階で破棄する。
+**機微情報の扱い（NFR-4 の具体化・二層化 [ADR-007](./decision-log.md)）**: 破棄の境界を「Relay 受信時」から「**クラウド転送時**」へ移す。
+- **ローカル配信**: `tool_name` / `file_path`（ベース名まで）/ `subagent_type` に加え、**作業依頼の本文のみ**（トップレベル user prompt + サブエージェントへの Task 依頼文）を `OfficeEvent` の optional フィールド（例 `requestText`）で保持する。ファイル内容・コード片・bash コマンド・URL クエリは**保持しない**（normalize で依頼文キーのみ抽出）。ローカル SQLite への保存は許容。
+- **クラウド転送**: `forward.ts` のクラウド向け経路が本文系フィールドを**必ず strip** し、従来の絞り込み（`tool_name` / `file_path` / `subagent_type` 程度）で送る。strip を**ユニットテストで必須化**（§10 参照）。
+- クラウド実装は将来（M3）。当面はローカルのみのため、ローカル本文保持を先行する。
 
 ---
 
@@ -275,7 +278,7 @@ ai-virtual-office/
 
 | 画面 | 優先度 | 内容 |
 |---|---|---|
-| オフィスビュー | P1 | メイン画面。フロア切替タブ / キャラホバーで詳細（セッション・現在ツール・経過時間） / 待ちパネル |
+| オフィスビュー | P1 | メイン画面。フロア切替タブ / キャラホバーで詳細（セッション・現在ツール・経過時間・**作業依頼文**［ローカルのみ・[ADR-007](./decision-log.md)］） / 吹き出し（活動状態 + 依頼文の短縮） / 待ちパネル |
 | セッション一覧サイド | P1 | キャラと 1:1。クリックでキャラへフォーカス |
 | リプレイビュー | P2 | 日付選択 + シークバー + 速度切替 |
 | レイアウトエディタ | P2 | FR-6 |
@@ -302,7 +305,7 @@ ai-virtual-office/
 |---|---|
 | hooks 導入が他ツール（pixel-agents 併用等）の hooks と競合 | マーカー方式のマージ/teardown（§5.1）で自分の分だけを管理。doctor で競合検知 |
 | masters/*.md のフォーマット変更で adapter が壊れる | adapter にスキーマバリデーション + 失敗時は前回生成 JSON で継続（graceful degradation） |
-| 機微情報（プロンプト・コード片）のクラウド流出 | NFR-4 / §7 の Relay 段階での destructive filtering。Phase 2 前にフィルタのユニットテストを必須化 |
+| 機微情報（プロンプト・コード片）のクラウド流出 | NFR-4 / §7 の二層化（[ADR-007](./decision-log.md)）。破棄境界を**クラウド転送（`forward.ts`）**に置き、「クラウドペイロードに本文が乗らない」をユニットテストで構造保証（クラウド公開 = M3/Phase 2 着手前に必須化）。ローカルは依頼文のみ保持しファイル内容・コード片は保持しない |
 | 「見た目が可愛いだけ」で終わる | M1 受入基準に「待ちパネルで許可待ちを見逃さない」という実用価値を含める |
 
 ---
