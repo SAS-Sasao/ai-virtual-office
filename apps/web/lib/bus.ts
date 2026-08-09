@@ -54,3 +54,12 @@ export function subscribe(fn: OfficeEventListener): () => void {
     listeners.delete(fn);
   };
 }
+
+/**
+ * 現在の購読者数を返す（バックエンド堅牢化サイクル2「修正C」の観測 seam）。
+ * SSE ルートのクリーンアップ（unsubscribe）が実際に効いているかを決定論的に
+ * 検証するために公開する。既存の publish/subscribe の振る舞いには影響しない。
+ */
+export function listenerCount(): number {
+  return getStore().listeners.size;
+}

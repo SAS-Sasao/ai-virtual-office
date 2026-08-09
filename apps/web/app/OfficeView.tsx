@@ -210,14 +210,20 @@ export function OfficeView({ initialLayoutMeta }: OfficeViewProps) {
 
     // restore（接続直後の直近状態復元）と live（通常配信）は同じ検証・適用経路
     // を通す。順序防御（seq/ts 比較）は state.applyEvent 側（office-state.ts）
-    // に一本化されているため、ここでは単純に parse → applyEvent するだけでよい。
-    // 併せてイベントログのリングバッファへも push する（サイドバー表示用）。
+    // に一本化されているため、ここでは単純に parse → applyEvent するだけでよい
+    // （state.applyEvent は常に無条件で呼ぶ＝OfficeState 側の順序防御・
+    // session_end の delete+notify 等の意味論は一切変えない）。
+    // イベントログのリングバッファは per-session identity で重複（EventSource
+    // の自動再接続ごとに再送される restore）を弾く（バックエンド堅牢化
+    // サイクル2「修正D」）。push が新規追加した（true を返した）ときのみ
+    // setEventLog し、不要な再レンダも抑止する。
     const applyRawEvent = (rawData: string): void => {
       try {
         const parsed = OfficeEventSchema.parse(JSON.parse(rawData));
         state.applyEvent(parsed);
-        eventLogBuffer.push(parsed);
-        setEventLog(eventLogBuffer.getItems());
+        if (eventLogBuffer.push(parsed)) {
+          setEventLog(eventLogBuffer.getItems());
+        }
       } catch {
         // 不正な payload（parse 失敗）は無視する。ingest 側の不具合を
         // UI に波及させない（NFR-2 と同じ思想）。
