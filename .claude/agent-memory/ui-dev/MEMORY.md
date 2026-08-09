@@ -1,3 +1,6 @@
 - [page.tsx ↔ game/ wiring pattern](project_page_tsx_game_layer_wiring.md) — async /api/layout fetch → Scene/renderer/debug, disposed-flag cleanup, e2e flag via location.search
 - [Canvas imperative sizing](feedback_canvas_imperative_sizing.md) — set canvas.width/height via ref, not useState; why React won't clobber it
 - [Real-machine verification workflow](project_realmachine_verification_workflow.md) — cc-sier-adapter real repo import, port 3005 recipe, next build tsconfig.json side effect
+- [SSE route idempotent cleanup + testing](project_sse_route_idempotent_cleanup_testing.md) — cancel()/enqueue-catch/request.signal abort converge on one cleanup(); test via bus.listenerCount() + reader.cancel()/AbortController, no real ports/sleep
+- [EventLogBuffer identity dedup solves SSE-reconnect double-record](project_eventlog_identity_dedup_log_layer.md) — fix duplicate-on-reconnect bugs at the UI/log layer (per-session Map), never in game/OfficeState.applyEvent
+- [NFR-4: no raw err objects in logs for external-input parse failures](feedback_nfr4_log_hygiene_no_raw_err_objects.md) — interpolate err.name only into a single string; DB/internal errors are fine to log fully

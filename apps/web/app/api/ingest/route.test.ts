@@ -3,6 +3,7 @@ import { subscribe, type OfficeEventListener } from "../../../lib/bus";
 import * as dbClient from "../../../db/client";
 import * as dbEvents from "../../../db/events";
 import { events } from "../../../db/schema";
+import { getStats, resetStatsSingletonForTests } from "../../../lib/stats";
 import { POST } from "./route";
 
 function jsonRequest(body: unknown, rawBody?: string): Request {
@@ -171,5 +172,101 @@ describe("POST /api/ingest -> db persistence", () => {
     expect(received).toHaveLength(1);
     expect(received[0]).toEqual(event);
     expect(warnSpy).toHaveBeenCalled();
+  });
+});
+
+/**
+ * バックエンド堅牢化サイクル2「修正A（#3 ingest silent-drops の観測可能化）」。
+ * AC-1 / AC-2 / AC-3。既存 L156-174 の DB 失敗 warn パターンを踏襲しつつ、
+ * NFR-4（機微情報の多層防御）としてログに生の err オブジェクト・err.message・
+ * body の値を一切含めないことを assert する。
+ */
+describe("POST /api/ingest -> observability（構造化ログ + stats カウンタ、AC-1/AC-2/AC-3）", () => {
+  beforeEach(() => {
+    resetStatsSingletonForTests();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    resetStatsSingletonForTests();
+  });
+
+  it("AC-1: schema 不一致は安定プレフィックスの構造化ログを出し、フィールド値を一切含めない（200 + ignored:true 維持）", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { received, unsubscribe } = collectPublished();
+
+    const raw = {
+      hook_event_name: "PreToolUse",
+      session_id: "must-not-leak-into-log",
+      tool_name: "Edit",
+    };
+    const res = await POST(jsonRequest(raw));
+
+    unsubscribe();
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ ok: true, ignored: true });
+    expect(received).toHaveLength(0);
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    const call = warnSpy.mock.calls[0];
+    expect(call).toEqual(["web: ingest dropped invalid event (schema)"]);
+    expect(JSON.stringify(call)).not.toContain("must-not-leak-into-log");
+    expect(JSON.stringify(call)).not.toContain("PreToolUse");
+
+    expect(getStats().snapshot().dropped.schema).toBe(1);
+  });
+
+  it("AC-2: パース不能ボディは安定プレフィックス + err.name のみのログを出す（生 err/err.message/body を含めない・200 維持）", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { received, unsubscribe } = collectPublished();
+    const secretBodyFragment = "must-not-leak-body-fragment";
+
+    const res = await POST(jsonRequest(undefined, `{${secretBodyFragment}`));
+
+    unsubscribe();
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ ok: true, ignored: true });
+    expect(received).toHaveLength(0);
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    const call = warnSpy.mock.calls[0];
+    // ログ引数は「安定プレフィックス + err.name」の単一文字列のみで、生の err
+    // オブジェクトや err.message、不正な body の断片を一切含まない（NFR-4）。
+    expect(call).toEqual(["web: ingest dropped unparseable body (SyntaxError)"]);
+    expect(call).toHaveLength(1);
+    expect(JSON.stringify(call)).not.toContain(secretBodyFragment);
+
+    expect(getStats().snapshot().dropped.unparseable).toBe(1);
+  });
+
+  it("AC-3: 正常受理は accepted をカウントする", async () => {
+    const { unsubscribe } = collectPublished();
+
+    const event = { type: "session_start", sessionId: "stats-accept-1", ts: 1 };
+    const res = await POST(jsonRequest(event));
+
+    unsubscribe();
+
+    expect(res.status).toBe(200);
+    expect(getStats().snapshot().acceptedCount).toBe(1);
+    expect(getStats().snapshot().droppedCount).toBe(0);
+  });
+
+  it("schema 不一致・パース不能を混在させても、dropped の理由別カウントがそれぞれ正しく積み上がる", async () => {
+    const { unsubscribe } = collectPublished();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await POST(jsonRequest({ hook_event_name: "PreToolUse" }));
+    await POST(jsonRequest(undefined, "{not valid json"));
+    await POST(jsonRequest({ type: "session_start", sessionId: "mixed-1", ts: 1 }));
+
+    unsubscribe();
+
+    const snap = getStats().snapshot();
+    expect(snap.dropped).toEqual({ schema: 1, unparseable: 1 });
+    expect(snap.droppedCount).toBe(2);
+    expect(snap.acceptedCount).toBe(1);
   });
 });

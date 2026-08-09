@@ -19,11 +19,35 @@ const HEARTBEAT_INTERVAL_MS = 15_000;
  * スキップするだけで、live 配信自体は継続する（NFR-2 と同じ「永続化は
  * 付加価値」思想）。15 秒ごとに heartbeat（コメント行）を送り、中間プロキシ
  * 等によるコネクションの切断を防ぐ。
+ *
+ * バックエンド堅牢化サイクル2「修正C」(AC-5): 購読解除（unsubscribe）・
+ * heartbeat の後始末は `cleanup()` に一本化し、①ReadableStream の `cancel()`
+ * ②ライブ/heartbeat の enqueue 失敗時（クライアントが既に消えている状況）
+ * ③`request.signal` の abort（`cancel()` が呼ばれない環境向けのフォールバック）
+ * の3経路すべてから同じ関数を呼ぶ。`cleanup()` は unsubscribe/heartbeat を
+ * null 化してから解除するため、複数回呼ばれても安全（冪等）。
+ *
+ * Phase 3 レビュー finding 対応: `cleanup()` は自身が ③で張った
+ * `request.signal` の abort リスナーも `removeEventListener` で確実に畳む
+ * （自己完結）。`removeEventListener` は未登録・二重呼びでも no-op のため、
+ * 追加のガード変数は不要。
  */
-export async function GET(): Promise<Response> {
+export async function GET(request: Request): Promise<Response> {
   const encoder = new TextEncoder();
   let unsubscribe: (() => void) | null = null;
   let heartbeat: ReturnType<typeof setInterval> | null = null;
+
+  const cleanup = (): void => {
+    if (unsubscribe) {
+      unsubscribe();
+      unsubscribe = null;
+    }
+    if (heartbeat !== null) {
+      clearInterval(heartbeat);
+      heartbeat = null;
+    }
+    request.signal.removeEventListener("abort", cleanup);
+  };
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -45,7 +69,9 @@ export async function GET(): Promise<Response> {
         try {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(ev)}\n\n`));
         } catch {
-          // controller が既に閉じている等の場合は配信をスキップする。
+          // controller が既に閉じている＝クライアントは消えている。配信を
+          // スキップするだけでなく、取りこぼした購読・タイマーを片付ける。
+          cleanup();
         }
       });
 
@@ -54,18 +80,17 @@ export async function GET(): Promise<Response> {
           controller.enqueue(encoder.encode(": ping\n\n"));
         } catch {
           // 同上。
+          cleanup();
         }
       }, HEARTBEAT_INTERVAL_MS);
+
+      // `cancel()`（reader.cancel() 由来）が呼ばれない環境（runtime によっては
+      // ReadableStream の cancel が届かないケースがある）に備え、
+      // `request.signal` の abort からも直接 cleanup を発火させる。
+      request.signal.addEventListener("abort", cleanup);
     },
     cancel() {
-      if (unsubscribe) {
-        unsubscribe();
-        unsubscribe = null;
-      }
-      if (heartbeat !== null) {
-        clearInterval(heartbeat);
-        heartbeat = null;
-      }
+      cleanup();
     },
   });
 
