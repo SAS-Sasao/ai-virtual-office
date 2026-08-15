@@ -79,6 +79,9 @@ export function insertEvent(db: Db, ev: OfficeEvent): void {
     .run();
 }
 
+/** `loadRecentSessions` の `maxSessions` 既定値（サイクル2b 設計メモ §C）。 */
+const DEFAULT_MAX_SESSIONS = 200;
+
 /**
  * セッションごとの最新 1 件のみを返す（NFR-3: 最新状態優先。全イベントの
  * 再生ではない）。`now - windowMs` より古い（最新イベントの `ts` がそれ以前の）
@@ -93,6 +96,14 @@ export function insertEvent(db: Db, ev: OfficeEvent): void {
  * insert 順に依存すると同一 ts で seq が逆順に届いた際に古い方を「最新」と
  * 誤判定する（Phase 3 レビュー medium finding）。
  *
+ * `maxSessions`（既定 200・サイクル2b 設計メモ §C）: fold（latest-per-session）
+ * 後の出力を、最新 `ts` の新しい順に上位 `maxSessions` セッションだけへ
+ * 切り詰める。主目的は再接続時の SSE emit 増幅の抑制であり、fold 前の
+ * 走査行数（30 日窓内の全行数）を抑えるものではない（SQL レベルの LIMIT は
+ * 本サイクルではスコープ外・follow-up）。セッション数が `maxSessions` を
+ * 超える場合、最も古い（最終活動が古い）セッションは restore されない
+ * （live 配信では引き続き出るため許容するトレードオフ）。
+ *
  * 戻り値は `ts` 昇順（決定論的なテスト・SSE 送出順のため）。同一セッション内の
  * 順序は問題にならない（各セッションにつき 1 件しか含まれないため）。
  */
@@ -100,6 +111,7 @@ export function loadRecentSessions(
   db: Db,
   now: number,
   windowMs: number = PRUNE_TIMEOUT_MS,
+  maxSessions: number = DEFAULT_MAX_SESSIONS,
 ): OfficeEvent[] {
   const cutoff = now - windowMs;
 
@@ -116,8 +128,14 @@ export function loadRecentSessions(
     }
   }
 
+  // maxSessions による output cap: 最新 ts の新しい順に上位 maxSessions
+  // セッションだけを残す（fold 後の切り詰めであり、SQL LIMIT ではない）。
+  const capped = [...latestBySession.values()]
+    .sort((a, b) => compareOrder(toOrderKey(b), toOrderKey(a)))
+    .slice(0, maxSessions);
+
   const result: OfficeEvent[] = [];
-  for (const row of latestBySession.values()) {
+  for (const row of capped) {
     const ev = rowToOfficeEvent(row);
     if (ev) {
       result.push(ev);
