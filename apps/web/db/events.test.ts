@@ -156,6 +156,44 @@ describe("db/events", () => {
       expect(restored).toHaveLength(1);
       expect(restored[0]).toMatchObject({ sessionId: "s1", ts: 100 });
     });
+
+    // AC-7: サイクル2b（DB durability）design memo §C。再接続時の SSE emit
+    // 増幅を抑えるため、fold 後（latest-per-session）の出力を最新 ts の
+    // 新しい順に上位 maxSessions セッションだけへ切り詰める。切り詰め後の
+    // 返却順は従来どおり ts 昇順。
+    it("caps output to the most recent maxSessions sessions (by latest ts), still sorted ascending (AC-7)", () => {
+      insertEvent(db, makeEvent({ sessionId: "oldest", ts: 100 }));
+      insertEvent(db, makeEvent({ sessionId: "middle", ts: 200 }));
+      insertEvent(db, makeEvent({ sessionId: "newest", ts: 300 }));
+
+      const restored = loadRecentSessions(db, 1_000, 10_000, 2);
+
+      expect(restored.map((e) => e.sessionId)).toEqual(["middle", "newest"]);
+    });
+
+    it("does not drop anything when the number of sessions is within maxSessions (AC-7 boundary)", () => {
+      insertEvent(db, makeEvent({ sessionId: "a", ts: 100 }));
+      insertEvent(db, makeEvent({ sessionId: "b", ts: 200 }));
+
+      const restored = loadRecentSessions(db, 1_000, 10_000, 2);
+
+      expect(restored.map((e) => e.sessionId)).toEqual(["a", "b"]);
+    });
+
+    // AC-8: maxSessions 既定 200 のもとで、既存の loadRecentSessions 系
+    // テスト（本 describe 内の全ケース）が無改修 green であることが本来の
+    // 回帰保証。ここでは「既定値を明示的に呼ばない場合でも 200 未満の
+    // セッション数では何も削られない」ことをもう一段直接的に確認する。
+    it("does not truncate anything when session count is well below the default maxSessions=200 (AC-8)", () => {
+      for (let i = 0; i < 10; i++) {
+        insertEvent(db, makeEvent({ sessionId: `s${i}`, ts: 100 + i }));
+      }
+
+      const restored = loadRecentSessions(db, 1_000, 10_000); // maxSessions omitted -> default 200
+
+      expect(restored).toHaveLength(10);
+      expect(restored.map((e) => e.ts)).toEqual([...restored.map((e) => e.ts)].sort((a, b) => a - b));
+    });
   });
 
   describe("pruneOlderThan", () => {
