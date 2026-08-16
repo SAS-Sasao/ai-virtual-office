@@ -14,3 +14,4 @@
 - [m1-4a-walk-leave-layout-api](project_m1_4a_walk_leave_layout_api.md) — walk/leave追加+GET /api/layout新規: door着地待ちのbg pollingパターン・enum拡張がgame/renderer.tsのRecord網羅チェックを壊す落とし穴・next build DB汚染説の訂正
 - [relay-durability-cycle1](project_relay_durability_cycle1.md) — seq fsync原子性+cli.ts構造改修+normalize safeParse/toFileBase: validatePortを0-65535に逸脱した理由(verify.sh依存)・fs facade未使用フィールドの解釈・import時副作用ゼロの遅延deps解決パターン
 - [web-db-durability-cycle2b](project_web_db_durability_cycle2b.md) — WAL+PRAGMA pin/定期prune/maxSessions実装: db.$client実行時seam・discriminated unionでnull契約を型強制・vitest 5000msタイムアウトはこの環境で約1/10のpre-existing flake
+- [adr007-request-text-b1](project_adr007_request_text_b1.md) — requestText追加(ADR-007二層化): whitelist例外のスコープ限定法・stripCloudSensitiveをready seam化・非漏洩テストをforward.test.tsへ一元化し正当な書き換えを通す型

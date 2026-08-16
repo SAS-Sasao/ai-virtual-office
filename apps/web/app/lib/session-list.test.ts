@@ -44,6 +44,24 @@ describe("buildSessionListRows (M1-4b: サイドバーのセッション一覧�
   });
 });
 
+describe("buildSessionListRows requestText (ADR-007 (b)-1 AC-9: 作業依頼の短縮表示)", () => {
+  it("includes a truncated requestText when the session carries one", () => {
+    const rows = buildSessionListRows([session({ sessionId: "s1", state: "type", lastTs: 0, requestText: "実装して" })], 0);
+    expect(rows[0].requestText).toBe("実装して");
+  });
+
+  it("truncates a long requestText to the shared 40-char limit with an ellipsis", () => {
+    const long = "a".repeat(50);
+    const rows = buildSessionListRows([session({ sessionId: "s1", state: "type", lastTs: 0, requestText: long })], 0);
+    expect(rows[0].requestText).toBe(`${"a".repeat(40)}…`);
+  });
+
+  it("leaves requestText undefined when the session has none", () => {
+    const rows = buildSessionListRows([session({ sessionId: "s1", state: "idle", lastTs: 0 })], 0);
+    expect(rows[0].requestText).toBeUndefined();
+  });
+});
+
 describe("buildWaitingRows / countWaiting (M1-4b AC-5: 待ちパネル + バッジの一致)", () => {
   it("buildWaitingRows only includes state === waiting sessions", () => {
     const sessions = [

@@ -170,6 +170,43 @@ describe("OfficeEventSchema", () => {
     }
   });
 
+  it("parses an event with requestText attached (ADR-007: local-only request text channel)", () => {
+    const input = {
+      type: "user_prompt",
+      sessionId: "sess-1",
+      ts: 1_700_000_000_000,
+      requestText: "実装して",
+    };
+
+    const result = OfficeEventSchema.parse(input);
+
+    expect(result).toEqual(input);
+  });
+
+  it("allows requestText to be omitted", () => {
+    const result = OfficeEventSchema.safeParse({
+      type: "session_start",
+      sessionId: "sess-1",
+      ts: 0,
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.requestText).toBeUndefined();
+    }
+  });
+
+  it("rejects a non-string requestText", () => {
+    const result = OfficeEventSchema.safeParse({
+      type: "user_prompt",
+      sessionId: "sess-1",
+      ts: 0,
+      requestText: 123,
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   it("still strips unknown keys when org/dept/role are present (NFR-4 defense in depth)", () => {
     const input = {
       type: "user_prompt",

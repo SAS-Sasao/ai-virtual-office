@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { OfficeEventSchema } from "@ai-office/protocol";
-import { normalizeHookEvent } from "./normalize.js";
+import { MAX_REQUEST_TEXT_LEN, normalizeHookEvent } from "./normalize.js";
 
 const NOW = 1_700_000_000_000;
 
@@ -35,7 +35,7 @@ describe("normalizeHookEvent", () => {
     expect(serialized).not.toContain("secret");
   });
 
-  it("UserPromptSubmit のプロンプト本文は出力に含まれない", () => {
+  it("UserPromptSubmit のプロンプト本文は requestText に載る（ローカル保持・ADR-007 AC-2）", () => {
     const raw = {
       hook_event_name: "UserPromptSubmit",
       session_id: "session-abc",
@@ -46,8 +46,7 @@ describe("normalizeHookEvent", () => {
 
     expect(result).not.toBeNull();
     expect(result?.type).toBe("user_prompt");
-    const serialized = JSON.stringify(result);
-    expect(serialized).not.toContain("機密プロンプト");
+    expect(result?.requestText).toBe("機密プロンプト");
   });
 
   it("Bash の command は出力に含まれない", () => {
@@ -68,7 +67,7 @@ describe("normalizeHookEvent", () => {
     expect(serialized).not.toContain("rm -rf");
   });
 
-  it("Task の subagent_type は残る", () => {
+  it("Task の subagent_type は残り、tool_input.prompt は requestText に載る（ローカル保持・ADR-007 AC-3）", () => {
     const raw = {
       hook_event_name: "PreToolUse",
       session_id: "session-abc",
@@ -83,8 +82,138 @@ describe("normalizeHookEvent", () => {
 
     expect(result).not.toBeNull();
     expect(result?.subagentType).toBe("tech-researcher");
+    expect(result?.requestText).toBe("機密の指示文");
+  });
+
+  it("PreToolUse(Bash) の command は requestText に載らない（ADR-007 AC-4: 依頼文以外のスコープ外）", () => {
+    const raw = {
+      hook_event_name: "PreToolUse",
+      session_id: "session-abc",
+      tool_name: "Bash",
+      tool_input: {
+        command: "rm -rf /",
+      },
+    };
+
+    const result = normalizeHookEvent(raw, NOW);
+
+    expect(result).not.toBeNull();
+    expect(result?.requestText).toBeUndefined();
     const serialized = JSON.stringify(result);
-    expect(serialized).not.toContain("機密の指示文");
+    expect(serialized).not.toContain("rm -rf");
+  });
+
+  it("PreToolUse(Edit) の file 内容(content/old_string/new_string)は requestText に載らない（ADR-007 AC-4）", () => {
+    const raw = {
+      hook_event_name: "PreToolUse",
+      session_id: "session-abc",
+      tool_name: "Edit",
+      tool_input: {
+        file_path: "/home/user/secret/App.tsx",
+        content: "SECRET-CONTENT",
+        old_string: "OLD",
+        new_string: "NEW",
+        prompt: "これは Edit の prompt もどきで載ってはいけない",
+      },
+    };
+
+    const result = normalizeHookEvent(raw, NOW);
+
+    expect(result).not.toBeNull();
+    expect(result?.requestText).toBeUndefined();
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("SECRET-CONTENT");
+    expect(serialized).not.toContain("これは Edit の prompt");
+  });
+
+  it("PreToolUse で tool_name が Task 以外の場合、tool_input.prompt があっても requestText に載らない（ADR-007 AC-4: Task 限定）", () => {
+    const raw = {
+      hook_event_name: "PreToolUse",
+      session_id: "session-abc",
+      tool_name: "Write",
+      tool_input: {
+        prompt: "Task ではないので載ってはいけない",
+      },
+    };
+
+    const result = normalizeHookEvent(raw, NOW);
+
+    expect(result).not.toBeNull();
+    expect(result?.requestText).toBeUndefined();
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("Task ではないので");
+  });
+
+  it("PostToolUse / Notification / Stop 等、user_prompt でも pre_tool(Task) でもない type では requestText を付けない（ADR-007 AC-4）", () => {
+    const cases: unknown[] = [
+      {
+        hook_event_name: "PostToolUse",
+        session_id: "session-abc",
+        tool_name: "Task",
+        tool_input: { prompt: "post_tool では載らない" },
+      },
+      {
+        hook_event_name: "Notification",
+        session_id: "session-abc",
+      },
+      {
+        hook_event_name: "Stop",
+        session_id: "session-abc",
+      },
+    ];
+
+    for (const raw of cases) {
+      const result = normalizeHookEvent(raw, NOW);
+      expect(result).not.toBeNull();
+      expect(result?.requestText).toBeUndefined();
+    }
+  });
+
+  it("UserPromptSubmit で prompt が空文字なら requestText を付けない（ADR-007 AC-5）", () => {
+    const raw = {
+      hook_event_name: "UserPromptSubmit",
+      session_id: "session-abc",
+      prompt: "",
+    };
+
+    const result = normalizeHookEvent(raw, NOW);
+
+    expect(result).not.toBeNull();
+    expect(result?.requestText).toBeUndefined();
+  });
+
+  it("UserPromptSubmit で prompt が MAX_REQUEST_TEXT_LEN を超える場合は切り詰められる（ADR-007 AC-5）", () => {
+    const longPrompt = "あ".repeat(MAX_REQUEST_TEXT_LEN + 500);
+    const raw = {
+      hook_event_name: "UserPromptSubmit",
+      session_id: "session-abc",
+      prompt: longPrompt,
+    };
+
+    const result = normalizeHookEvent(raw, NOW);
+
+    expect(result).not.toBeNull();
+    expect(result?.requestText).toBeDefined();
+    expect(result?.requestText?.length).toBe(MAX_REQUEST_TEXT_LEN);
+    expect(result?.requestText).toBe(longPrompt.slice(0, MAX_REQUEST_TEXT_LEN));
+  });
+
+  it("Task の tool_input.prompt が非 string（数値等）なら requestText を付けない（ADR-007 AC-4/AC-5 型防御）", () => {
+    const raw = {
+      hook_event_name: "PreToolUse",
+      session_id: "session-abc",
+      tool_name: "Task",
+      tool_input: {
+        subagent_type: "tech-researcher",
+        prompt: 12345,
+      },
+    };
+
+    const result = normalizeHookEvent(raw, NOW);
+
+    expect(result).not.toBeNull();
+    expect(result?.subagentType).toBe("tech-researcher");
+    expect(result?.requestText).toBeUndefined();
   });
 
   it("cwd / transcript_path は出力に含まれない", () => {

@@ -6,7 +6,7 @@
 import type { CharacterState } from "@ai-office/protocol";
 import type { SessionCharacter } from "../../game/office-state";
 import { formatElapsed } from "./elapsed";
-import { shortenSessionId } from "./format";
+import { shortenSessionId, truncateText } from "./format";
 
 const UNKNOWN_LABEL = "不明";
 
@@ -18,6 +18,11 @@ export interface SessionListRow {
   org: string;
   state: CharacterState;
   elapsed: string;
+  /**
+   * 現在着手中の作業依頼（短縮表示用、ADR-007 (b)-1 AC-9）。
+   * `SessionCharacter.requestText` が無いセッションは undefined。
+   */
+  requestText?: string;
 }
 
 function toRow(session: SessionCharacter, nowMs: number): SessionListRow {
@@ -29,6 +34,7 @@ function toRow(session: SessionCharacter, nowMs: number): SessionListRow {
     org: session.org ?? "",
     state: session.state,
     elapsed: formatElapsed(nowMs, session.lastTs),
+    requestText: session.requestText !== undefined ? truncateText(session.requestText) : undefined,
   };
 }
 

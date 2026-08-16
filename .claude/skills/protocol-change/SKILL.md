@@ -34,6 +34,7 @@ description: >
    `Unknown option: 'run'` で失敗するので注意）
 
 6. **機微情報の再確認（NFR-4）**: 新フィールドがプロンプト本文・ファイル内容・URL・cwd 等を運ばないことを確認する。運ぶ場合は `packages/relay/src/normalize.ts` のホワイトリストに入れてはならない
+   - ⚠**例外（ADR-007 二層化）**: **依頼文キー**（user prompt / Task の `tool_input.prompt`）は `requestText` に載せてよい。ただしローカル限定で、クラウド境界の `stripCloudSensitive`（`packages/relay/src/forward.ts`）+ ユニットテストで NFR-4 を担保すること。それ以外の本文（ファイル内容・コマンド・URL・cwd）は従来どおり禁止
 7. **fixture の更新**: `POST /test/inject` に投げる fixture（E2E 導入後は `fixtures/e2e/*.jsonl`）を新スキーマに合わせる
 
 ## 注意
