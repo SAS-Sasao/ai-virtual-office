@@ -56,6 +56,17 @@ export const OfficeEventSchema = z.object({
   org: z.string().optional(),
   dept: z.string().optional(),
   role: z.string().optional(),
+  /**
+   * ユーザー/サブエージェントへの依頼文本文（ADR-007 二層化モデルの例外）。
+   *
+   * NFR-4 の blanket whitelist（本文系は一切保存しない）に対する唯一の例外。
+   * ローカル配信経路（hooks → Relay → ローカル web）でのみ保持してよい値であり、
+   * クラウド転送境界では `packages/relay/src/forward.ts` の
+   * `stripCloudSensitive` で必ず取り除くこと。抽出元は Relay の正規化段階
+   * （`packages/relay/src/normalize.ts`）で UserPromptSubmit の `prompt` と
+   * Task ツールの `tool_input.prompt` のみに厳しく限定されている。
+   */
+  requestText: z.string().optional(),
 });
 
 export type OfficeEvent = z.infer<typeof OfficeEventSchema>;

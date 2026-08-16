@@ -32,17 +32,30 @@ export function SessionList({ rows, focusedSessionId, onSelect }: SessionListPro
                     cursor: "pointer",
                     padding: "6px 4px",
                     display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 8,
+                    flexDirection: "column",
+                    gap: 2,
                     backgroundColor: focused ? PAGE_BG : "transparent",
                     border: focused ? `1px solid ${BORDER_COLOR}` : "1px solid transparent",
                     color: TEXT_PRIMARY,
                   }}
                 >
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.role}</span>
-                  <span style={{ color: STATE_COLORS[row.state], flexShrink: 0 }}>{STATE_LABELS[row.state]}</span>
-                  <span style={{ color: TEXT_MUTED, flexShrink: 0 }}>{row.elapsed}</span>
+                  <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.role}</span>
+                    <span style={{ color: STATE_COLORS[row.state], flexShrink: 0 }}>{STATE_LABELS[row.state]}</span>
+                    <span style={{ color: TEXT_MUTED, flexShrink: 0 }}>{row.elapsed}</span>
+                  </span>
+                  {row.requestText !== undefined ? (
+                    <span
+                      style={{
+                        color: TEXT_SECONDARY,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {row.requestText}
+                    </span>
+                  ) : null}
                 </button>
               </li>
             );

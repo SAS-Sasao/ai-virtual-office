@@ -42,6 +42,18 @@ export interface SessionCharacter {
   role?: string;
   /** 現在進行中の Task（subagent 呼び出し）のスタック。LIFO で push/pop する。 */
   activeSubagents: SubagentEntry[];
+  /**
+   * このセッションが着手している作業依頼の本文（ADR-007 二層モデル・ローカル
+   * 配信専用チャンネル。(b)-1）。`user_prompt`（トップレベルのユーザー依頼）と
+   * `pre_tool`（Task 呼び出しの依頼文）から populate される。org/dept/role と
+   * 同じ「消さない」パススルー方針: 後続イベントが requestText を運ばない場合は
+   * 既存の値を保持する（新しい値が来た場合のみ上書き）。
+   *
+   * 【本サイクルのスコープ】session 単位で保持する（精密な subagent 個別割当は
+   * (b)-2 以降）。relay 側で NFR-4 スコープが厳守されている（依頼文キーのみ）
+   * ことを前提に、ここでは受け取った値をそのまま保持するだけで良い。
+   */
+  requestText?: string;
 }
 
 export interface OfficeSnapshot {
@@ -94,6 +106,15 @@ function attributionPatch(ev: OfficeEvent): Pick<SessionCharacter, "org" | "dept
  */
 function taskEntry(ev: OfficeEvent): SubagentEntry {
   return { subagentType: ev.subagentType, org: ev.org, dept: ev.dept, role: ev.role };
+}
+
+/**
+ * イベントに requestText が乗っている場合のみパッチを返す（キー自体を省略
+ * することで、upsert 側のデフォルト値＝既存の requestText を上書きしない。
+ * attributionPatch と同じパターン。ADR-007 (b)-1）。
+ */
+function requestTextPatch(ev: OfficeEvent): Pick<SessionCharacter, "requestText"> {
+  return ev.requestText !== undefined ? { requestText: ev.requestText } : {};
 }
 
 /**
@@ -154,6 +175,10 @@ export class OfficeState {
           // org/dept/role へは適用しない（クラスコメント参照）。代わりに
           // activeSubagents へ push する。
           ...(isTask ? { activeSubagents: [...(existing?.activeSubagents ?? []), taskEntry(ev)] } : attributionPatch(ev)),
+          // pre_tool は toolName を問わず requestText を運びうる（relay は Task の
+          // tool_input.prompt のみを載せるため、実際には Task に限られるが、
+          // ここでは「今このセッションが着手している依頼」として一律に適用する。
+          ...requestTextPatch(ev),
         });
         break;
       }
@@ -170,7 +195,13 @@ export class OfficeState {
         break;
       }
       case "user_prompt": {
-        this.upsert(ev.sessionId, { state: "thinking", lastTs: ev.ts, lastSeq: ev.seq, ...attributionPatch(ev) });
+        this.upsert(ev.sessionId, {
+          state: "thinking",
+          lastTs: ev.ts,
+          lastSeq: ev.seq,
+          ...attributionPatch(ev),
+          ...requestTextPatch(ev),
+        });
         break;
       }
       case "notification": {
@@ -249,6 +280,7 @@ export class OfficeState {
       dept?: string;
       role?: string;
       activeSubagents?: SubagentEntry[];
+      requestText?: string;
     },
   ): void {
     const existing = this.sessions.get(sessionId);
@@ -259,6 +291,7 @@ export class OfficeState {
       dept: existing?.dept,
       role: existing?.role,
       activeSubagents: existing?.activeSubagents ?? [],
+      requestText: existing?.requestText,
       ...patch,
     });
   }

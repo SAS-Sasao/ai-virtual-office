@@ -5,7 +5,7 @@
 // のみを持つ（apps/web/game と同じ「テスタビリティは後付けしない」方針）。
 import type { Character, OfficeEvent } from "@ai-office/protocol";
 import { RECEPTION_DEPT_ID } from "../../game/layout-runtime";
-import { shortenSessionId } from "./format";
+import { shortenSessionId, truncateText } from "./format";
 
 const DEFAULT_RECEPTIONIST_NAME = "オフィス";
 const DEFAULT_NARRATION_TEXT = "オフィスは静かです。";
@@ -34,6 +34,16 @@ function subjectOf(event: OfficeEvent): string {
 }
 
 /**
+ * 依頼文本文（requestText, ADR-007 (b)-1）があれば、定型文の末尾に短縮した
+ * 依頼文を織り込む。requestText が無ければ従来の定型文をそのまま返す
+ * （既存ナレーションの見た目は不変・AC-10）。
+ */
+function withRequestText(baseText: string, event: OfficeEvent): string {
+  if (event.requestText === undefined) return baseText;
+  return `${baseText}: ${truncateText(event.requestText)}`;
+}
+
+/**
  * 直近の OfficeEvent から実況テキストを 1 行組み立てる。イベントが無ければ
  * 静止時の定型文を返す。ボタン等の操作は一切生成しない（表示専用）。
  */
@@ -43,10 +53,10 @@ export function buildNarrationText(event: OfficeEvent | null): string {
   const who = subjectOf(event);
 
   if (event.type === "pre_tool") {
-    return `${who} が ${event.toolName ?? DEFAULT_TOOL_LABEL} を実行しています`;
+    return withRequestText(`${who} が ${event.toolName ?? DEFAULT_TOOL_LABEL} を実行しています`, event);
   }
   if (event.type === "post_tool") {
-    return `${who} が ${event.toolName ?? DEFAULT_TOOL_LABEL} の結果を確認しています`;
+    return withRequestText(`${who} が ${event.toolName ?? DEFAULT_TOOL_LABEL} の結果を確認しています`, event);
   }
-  return `${who} が ${EVENT_PHRASES[event.type]}`;
+  return withRequestText(`${who} が ${EVENT_PHRASES[event.type]}`, event);
 }

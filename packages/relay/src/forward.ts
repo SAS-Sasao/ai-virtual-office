@@ -1,6 +1,21 @@
 import type { OfficeEvent } from "@ai-office/protocol";
 
 /**
+ * クラウド転送境界で `requestText`（ローカル限定の依頼文本文、ADR-007）を
+ * 取り除いた新しい OfficeEvent を返す純関数。元の event は変更しない。
+ *
+ * ⚠**将来クラウド向け forwarder を実装する際は、必ずこの関数を通してから
+ * 送信すること**（M3 で実装予定。本サイクルではローカル転送のみのため未使用の
+ * ready seam）。`createForwarder`（このファイル）はローカル web の
+ * `/api/ingest` へ送るものであり、ローカルでは `requestText` を含めて送信する
+ * のが正しい（NFR-4 はクラウド境界にのみ適用される。ADR-007 参照）。
+ */
+export function stripCloudSensitive(event: OfficeEvent): OfficeEvent {
+  const { requestText: _requestText, ...rest } = event;
+  return rest;
+}
+
+/**
  * 成否を戻り値で返す転送関数。
  *
  * NFR-2: 転送失敗（ネットワークエラー・非 2xx 応答のいずれも含む）でも

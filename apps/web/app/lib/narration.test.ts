@@ -70,3 +70,40 @@ describe("buildNarrationText (M1-4b: 直近イベントの実況文。可視化�
     expect(text).toContain("Read");
   });
 });
+
+describe("buildNarrationText requestText (ADR-007 (b)-1 AC-10: 作業依頼本文を織り込む)", () => {
+  it("appends the requestText to a user_prompt narration line", () => {
+    const text = buildNarrationText(
+      ev({ type: "user_prompt", sessionId: "sess-1", ts: 1000, role: "worker", requestText: "実装して" }),
+    );
+    expect(text).toContain("指示を受け取りました");
+    expect(text).toContain("実装して");
+  });
+
+  it("appends the requestText to a pre_tool(Task) narration line as well", () => {
+    const text = buildNarrationText(
+      ev({
+        type: "pre_tool",
+        sessionId: "sess-1",
+        ts: 1000,
+        role: "worker",
+        toolName: "Task",
+        requestText: "調査して",
+      }),
+    );
+    expect(text).toContain("Task");
+    expect(text).toContain("調査して");
+  });
+
+  it("truncates a long requestText using the shared 40-char limit", () => {
+    const long = "a".repeat(50);
+    const text = buildNarrationText(ev({ type: "user_prompt", sessionId: "sess-1", ts: 1000, role: "worker", requestText: long }));
+    expect(text).toContain(`${"a".repeat(40)}…`);
+    expect(text).not.toContain(long);
+  });
+
+  it("keeps the traditional fixed phrase unchanged when requestText is absent (no regression)", () => {
+    const text = buildNarrationText(ev({ type: "user_prompt", sessionId: "sess-1", ts: 1000, role: "worker" }));
+    expect(text).toBe("worker が 指示を受け取りました");
+  });
+});

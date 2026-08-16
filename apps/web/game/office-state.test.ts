@@ -433,6 +433,96 @@ describe("OfficeState.applyEvent Task attribution protection (M1-4b AC-1 — reg
   });
 });
 
+describe("OfficeState.applyEvent requestText (ADR-007 (b)-1 AC-8: 作業依頼本文の保持)", () => {
+  it("user_prompt with requestText sets it on the session", () => {
+    const state = new OfficeState();
+    state.applyEvent(ev({ type: "session_start", sessionId: "s1", ts: 1000 }));
+    state.applyEvent(ev({ type: "user_prompt", sessionId: "s1", ts: 1100, requestText: "実装して" }));
+
+    const session = state.getSnapshot().sessions.find((s) => s.sessionId === "s1");
+    expect(session?.requestText).toBe("実装して");
+  });
+
+  it("pre_tool(Task) with requestText sets it on the session (今このセッションが着手している依頼)", () => {
+    const state = new OfficeState();
+    state.applyEvent(ev({ type: "session_start", sessionId: "s1", ts: 1000 }));
+    state.applyEvent(
+      ev({
+        type: "pre_tool",
+        sessionId: "s1",
+        toolName: "Task",
+        subagentType: "researcher",
+        ts: 1100,
+        requestText: "調査して",
+      }),
+    );
+
+    const session = state.getSnapshot().sessions.find((s) => s.sessionId === "s1");
+    expect(session?.requestText).toBe("調査して");
+  });
+
+  it("user_prompt without requestText keeps the previously known requestText (消さない方針)", () => {
+    const state = new OfficeState();
+    state.applyEvent(ev({ type: "session_start", sessionId: "s1", ts: 1000 }));
+    state.applyEvent(ev({ type: "user_prompt", sessionId: "s1", ts: 1100, requestText: "実装して" }));
+    state.applyEvent(ev({ type: "user_prompt", sessionId: "s1", ts: 1200 }));
+
+    const session = state.getSnapshot().sessions.find((s) => s.sessionId === "s1");
+    expect(session?.requestText).toBe("実装して");
+  });
+
+  it("a later user_prompt with a new requestText overwrites the previous one", () => {
+    const state = new OfficeState();
+    state.applyEvent(ev({ type: "session_start", sessionId: "s1", ts: 1000 }));
+    state.applyEvent(ev({ type: "user_prompt", sessionId: "s1", ts: 1100, requestText: "実装して" }));
+    state.applyEvent(ev({ type: "user_prompt", sessionId: "s1", ts: 1200, requestText: "テストを書いて" }));
+
+    const session = state.getSnapshot().sessions.find((s) => s.sessionId === "s1");
+    expect(session?.requestText).toBe("テストを書いて");
+  });
+
+  it("requestText survives subsequent events that carry no requestText of their own (post_tool/notification)", () => {
+    const state = new OfficeState();
+    state.applyEvent(ev({ type: "session_start", sessionId: "s1", ts: 1000 }));
+    state.applyEvent(
+      ev({
+        type: "pre_tool",
+        sessionId: "s1",
+        toolName: "Task",
+        subagentType: "researcher",
+        ts: 1100,
+        requestText: "調査して",
+      }),
+    );
+    state.applyEvent(ev({ type: "post_tool", sessionId: "s1", toolName: "Task", ts: 1200 }));
+    state.applyEvent(ev({ type: "notification", sessionId: "s1", ts: 1300 }));
+
+    const session = state.getSnapshot().sessions.find((s) => s.sessionId === "s1");
+    expect(session?.requestText).toBe("調査して");
+  });
+
+  it("leaves requestText undefined when no event ever carried one (no regression)", () => {
+    const state = new OfficeState();
+    state.applyEvent(ev({ type: "session_start", sessionId: "s1", ts: 1000 }));
+    state.applyEvent(ev({ type: "pre_tool", sessionId: "s1", toolName: "Edit", ts: 1100 }));
+
+    const session = state.getSnapshot().sessions.find((s) => s.sessionId === "s1");
+    expect(session?.requestText).toBeUndefined();
+  });
+
+  it("a discarded out-of-order event does not affect the held requestText (ordering defense)", () => {
+    const state = new OfficeState();
+    state.applyEvent(ev({ type: "session_start", sessionId: "s1", ts: 1000, seq: 5 }));
+    state.applyEvent(ev({ type: "user_prompt", sessionId: "s1", ts: 1100, seq: 6, requestText: "実装して" }));
+    // stale/out-of-order (lower seq than currently held state): the whole event must be
+    // discarded, so its requestText must not leak into the session either.
+    state.applyEvent(ev({ type: "user_prompt", sessionId: "s1", ts: 900, seq: 3, requestText: "古い依頼" }));
+
+    const session = state.getSnapshot().sessions.find((s) => s.sessionId === "s1");
+    expect(session?.requestText).toBe("実装して");
+  });
+});
+
 describe("OfficeState.subscribe", () => {
   it("notifies subscribers when applyEvent changes state", () => {
     const state = new OfficeState();
