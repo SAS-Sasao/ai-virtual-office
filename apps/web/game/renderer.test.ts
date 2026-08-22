@@ -6,7 +6,15 @@ import type { Character, OfficeEvent } from "@ai-office/protocol";
 import { OfficeState } from "./office-state";
 import { buildRuntimeLayout } from "./layout-runtime";
 import { Scene } from "./scene";
-import { OFFICE_CELL_BBOX, RPG_CELL_BBOX, SPRITE_SHEET_SRC, cellFor, startRenderer, themeForOrg } from "./renderer";
+import {
+  OFFICE_CELL_BBOX,
+  RPG_CELL_BBOX,
+  SPRITE_SHEET_SRC,
+  cellFor,
+  startRenderer,
+  themeForOrg,
+  truncateForDisplay,
+} from "./renderer";
 import type { CanvasFactory, DrawableCanvas, SpriteSourceImage } from "./sprites";
 import { REAL_SHAPE_CHARACTERS, REAL_SHAPE_FLOOR } from "./fixtures/real-layout-fixture";
 
@@ -395,6 +403,112 @@ describe("startRenderer: focus ring / sub label / hover card (M1-4b AC-4/AC-6)",
     raf.pump(0);
 
     expect(strokeRectCalls.filter((c) => c.w === 168)).toHaveLength(0);
+
+    handle.stop();
+  });
+
+  it("draws the head-overhead request caption without throwing, without being miscounted as the hover card (AC-5, ADR-007 (b)-2)", () => {
+    const { runtimeLayout, scene, officeState } = buildTestSceneWithRoster();
+    officeState.applyEvent(
+      ev({ type: "session_start", sessionId: "sess-1", ts: 1000, org: "domain-tech-collection", dept: "dept-research", role: "tech-researcher" }),
+    );
+    officeState.applyEvent(
+      ev({
+        type: "pre_tool",
+        sessionId: "sess-1",
+        toolName: "Edit",
+        ts: 1100,
+        org: "domain-tech-collection",
+        dept: "dept-research",
+        role: "tech-researcher",
+        requestText: "とても長い依頼文の実装をしてほしいという内容の例文です",
+      }),
+    );
+
+    const { factory } = createStubCanvasFactory();
+    const { canvas, strokeRectCalls, fillTextCalls } = createMainCanvasRecordingStub();
+    const raf = createManualRaf();
+
+    const handle = startRenderer(canvas, scene, runtimeLayout, {
+      canvasFactory: factory,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+    });
+
+    expect(() => raf.pump(0)).not.toThrow();
+
+    // キャプション枠は既存の hover-card 枠カウント（strokeStyle==='#9aa0b8' && w===168）に
+    // 混入しない（rev.1 review fix_suggestion の回帰ガード）。
+    expect(strokeRectCalls.filter((c) => c.strokeStyle === "#9aa0b8" && c.w === 168)).toHaveLength(0);
+    // 短縮キャプション文字列が描かれている（末尾は "…"）。
+    expect(fillTextCalls.some((c) => c.text.endsWith("…") && c.text.length < "とても長い依頼文の実装をしてほしいという内容の例文です".length)).toBe(true);
+
+    handle.stop();
+  });
+
+  it("draws the hover card's request line without throwing, keeping the existing card-border assertion green (AC-5, ADR-007 (b)-2)", () => {
+    const { runtimeLayout, scene, officeState } = buildTestSceneWithRoster();
+    officeState.applyEvent(
+      ev({ type: "session_start", sessionId: "sess-1", ts: 1000, org: "domain-tech-collection", dept: "dept-research", role: "tech-researcher" }),
+    );
+    officeState.applyEvent(
+      ev({
+        type: "pre_tool",
+        sessionId: "sess-1",
+        toolName: "Edit",
+        ts: 1100,
+        org: "domain-tech-collection",
+        dept: "dept-research",
+        role: "tech-researcher",
+        requestText: "設計書を更新して",
+      }),
+    );
+    scene.setPointer(2 * REAL_SHAPE_FLOOR.grid.tileSize + 5, 4 * REAL_SHAPE_FLOOR.grid.tileSize + 5);
+    expect(scene.getHoveredCharacter()?.requestText).toBe("設計書を更新して");
+
+    const { factory } = createStubCanvasFactory();
+    const { canvas, strokeRectCalls, fillTextCalls } = createMainCanvasRecordingStub();
+    const raf = createManualRaf();
+
+    const handle = startRenderer(canvas, scene, runtimeLayout, {
+      canvasFactory: factory,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+    });
+
+    expect(() => raf.pump(0)).not.toThrow();
+
+    // 既存 assertion 無改修 green: カード枠は依然として厳密に 1 件のまま
+    // （pre_tool(Edit) 後は state が "type" のため枠色は "#7ef29a"。既存テストが
+    // 使う w===168 は依頼文キャプション枠と衝突しないため、幅だけで数えても安全）。
+    const cardBorderCalls = strokeRectCalls.filter((c) => c.strokeStyle === "#7ef29a" && c.w === 168);
+    expect(cardBorderCalls).toHaveLength(1);
+    // 依頼文行が描かれている。
+    expect(fillTextCalls.some((c) => c.text === "req: 設計書を更新して")).toBe(true);
+
+    handle.stop();
+  });
+
+  it("shows a '-' request line when requestText is absent, without throwing (AC-5)", () => {
+    const { runtimeLayout, scene, officeState } = buildTestSceneWithRoster();
+    officeState.applyEvent(
+      ev({ type: "session_start", sessionId: "sess-1", ts: 1000, org: "domain-tech-collection", dept: "dept-research", role: "tech-researcher" }),
+    );
+    scene.setPointer(2 * REAL_SHAPE_FLOOR.grid.tileSize + 5, 4 * REAL_SHAPE_FLOOR.grid.tileSize + 5);
+    expect(scene.getHoveredCharacter()?.requestText).toBeUndefined();
+
+    const { factory } = createStubCanvasFactory();
+    const { canvas, fillTextCalls } = createMainCanvasRecordingStub();
+    const raf = createManualRaf();
+
+    const handle = startRenderer(canvas, scene, runtimeLayout, {
+      canvasFactory: factory,
+      requestAnimationFrame: raf.requestAnimationFrame,
+      cancelAnimationFrame: raf.cancelAnimationFrame,
+    });
+
+    expect(() => raf.pump(0)).not.toThrow();
+    expect(fillTextCalls.some((c) => c.text === "req: -")).toBe(true);
 
     handle.stop();
   });
@@ -1016,6 +1130,31 @@ describe("startRenderer: floor backdrop layer (M2-2 AC-1/2/4/5/11)", () => {
     expect(floor.fillRectCalls.filter((c) => c.fillStyle === DESK_COLOR)).toHaveLength(3);
 
     handle.stop();
+  });
+});
+
+describe("truncateForDisplay (ADR-007 (b)-2 AC-4)", () => {
+  it("returns long text truncated to maxChars with a trailing ellipsis", () => {
+    const result = truncateForDisplay("実装して欲しい依頼の本文がとても長い場合の例です", 10);
+    expect(result).toHaveLength(10);
+    expect(result.endsWith("…")).toBe(true);
+    expect(result.slice(0, 9)).toBe("実装して欲しい依頼の本文がとても長い場合の例です".slice(0, 9));
+  });
+
+  it("returns short text unchanged (no truncation, no ellipsis)", () => {
+    expect(truncateForDisplay("短い依頼", 10)).toBe("短い依頼");
+  });
+
+  it("returns text unchanged when its length exactly equals maxChars (boundary)", () => {
+    expect(truncateForDisplay("1234567890", 10)).toBe("1234567890");
+  });
+
+  it("returns an empty string for undefined input", () => {
+    expect(truncateForDisplay(undefined, 10)).toBe("");
+  });
+
+  it("returns an empty string for empty-string input", () => {
+    expect(truncateForDisplay("", 10)).toBe("");
   });
 });
 

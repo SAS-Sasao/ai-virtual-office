@@ -102,8 +102,20 @@ const FOCUS_RING_COLOR = "#ffd166";
 const SUB_LABEL_TEXT_COLOR = "#9aa0b8";
 const CARD_BG_COLOR = "#12152a";
 const CARD_WIDTH_PX = 168;
-const CARD_HEIGHT_PX = 96;
+// ADR-007 (b)-2: 依頼文行の追加で 1 行分（既存 6 行 → 7 行）高さを増やす。
+const CARD_HEIGHT_PX = 109;
 const CARD_MARGIN_PX = 6;
+
+// ADR-007 (b)-2: 頭上吹き出しの依頼文キャプション（既存 hover-card 枠カウントとの
+// 誤検出回避のため、色/幅を意図的に別値にする。枠幅はキャプション文字数で決まり
+// CARD_WIDTH_PX=168 に達しないため w での混同は無いが、色も念のため別トークンにする）。
+const REQUEST_CAPTION_MAX_CHARS = 18;
+const REQUEST_CAPTION_BORDER_COLOR = "#5a6088";
+const REQUEST_CAPTION_HEIGHT_PX = 11;
+const REQUEST_CAPTION_GAP_PX = 2;
+
+// ADR-007 (b)-2: ホバーカードの依頼文行（`req: <短縮>`）の短縮上限（カード幅に収める）。
+const HOVER_CARD_REQUEST_MAX_CHARS = 40;
 
 const WAITING_BLINK_PERIOD_MS = 500;
 const BOB_PERIOD_MS = 2600;
@@ -232,6 +244,20 @@ export function cellFor(theme: SpriteTheme, role: string, dept: string): SpriteC
   const index = dept in DEPT_CELL_INDEX ? DEPT_CELL_INDEX[dept] : DEFAULT_CELL_INDEX;
   const table = CELL_BBOX_BY_THEME[theme];
   return table[index] ?? table[DEFAULT_CELL_INDEX];
+}
+
+/**
+ * ADR-007 (b)-2: 依頼文（`requestText`）を Canvas 描画向けに短縮する game 層ローカルの
+ * 純関数（`apps/web/app/lib/format.ts` の `truncateText` は app 層のため import しない
+ * ・game の自己完結性を保つ）。空文字/undefined は空文字として扱う。超過分は末尾を
+ * `…` に差し替え、切り詰め後の長さは常に `maxChars` になる（`maxChars<=0` は空文字）。
+ */
+export function truncateForDisplay(text: string | undefined, maxChars: number): string {
+  if (!text) return "";
+  if (maxChars <= 0) return "";
+  if (text.length <= maxChars) return text;
+  if (maxChars === 1) return "…";
+  return text.slice(0, maxChars - 1) + "…";
 }
 
 function poseFor(character: RuntimeCharacter, now: number, fastMode: boolean): SpritePose {
@@ -566,11 +592,26 @@ function drawOverlay(
   if (character.state === "idle" || character.state === "walk") {
     return; // README 抽出仕様 2: idle は吹き出し無し。walk も移動中は非表示にする
   }
+
+  // ADR-007 (b)-2: 頭上の吹き出しスタックを footY 側（topY - BUBBLE_GAP_PX）から
+  // 上へ積む。依頼文キャプションがあれば状態バブルの下（スプライトの頭のすぐ上）
+  // に描き、状態バブルはその分だけ押し上げる。requestText 無し時は cursorBottom が
+  // stackBottom のままなので、状態バブルの位置は従来と完全に一致する（無回帰）。
+  const stackBottom = topY - BUBBLE_GAP_PX;
+  let cursorBottom = stackBottom;
+
+  const captionText = character.requestText ? truncateForDisplay(character.requestText, REQUEST_CAPTION_MAX_CHARS) : "";
+  let captionBoxY = 0;
+  if (captionText) {
+    captionBoxY = cursorBottom - REQUEST_CAPTION_HEIGHT_PX;
+    cursorBottom = captionBoxY - REQUEST_CAPTION_GAP_PX;
+  }
+
   const color = STATE_COLORS[character.state];
   const label = character.state;
   const boxWidth = label.length * OVERLAY_CHAR_WIDTH_PX + 8;
   const boxX = centerX - boxWidth / 2;
-  const boxY = topY - BUBBLE_GAP_PX - BUBBLE_HEIGHT_PX;
+  const boxY = cursorBottom - BUBBLE_HEIGHT_PX;
   ctx.fillStyle = "#12152a";
   ctx.strokeStyle = color;
   ctx.lineWidth = 1;
@@ -580,6 +621,21 @@ function drawOverlay(
   ctx.font = "9px monospace";
   ctx.textAlign = "left";
   ctx.fillText(label, boxX + 4, boxY + BUBBLE_HEIGHT_PX - 3);
+
+  if (captionText) {
+    // 幅/色を状態バブル・ホバーカード枠（w===168）とは別値にする（誤カウント回避）。
+    const captionWidth = captionText.length * OVERLAY_CHAR_WIDTH_PX + 8;
+    const captionX = centerX - captionWidth / 2;
+    ctx.fillStyle = "#12152a";
+    ctx.strokeStyle = REQUEST_CAPTION_BORDER_COLOR;
+    ctx.lineWidth = 1;
+    ctx.fillRect(captionX, captionBoxY, captionWidth, REQUEST_CAPTION_HEIGHT_PX);
+    ctx.strokeRect(captionX, captionBoxY, captionWidth, REQUEST_CAPTION_HEIGHT_PX);
+    ctx.fillStyle = TEXT_PRIMARY;
+    ctx.font = "8px monospace";
+    ctx.textAlign = "left";
+    ctx.fillText(captionText, captionX + 4, captionBoxY + REQUEST_CAPTION_HEIGHT_PX - 2);
+  }
 
   if (character.name) {
     ctx.fillStyle = TEXT_PRIMARY;
@@ -644,7 +700,9 @@ function drawHoverCard(ctx: CanvasRenderingContext2D, hovered: HoveredCharacterD
 
   const nameLine = hovered.name ? `${hovered.name}(${hovered.role})` : hovered.role;
   const sessionLine = `${hovered.sessionId ?? "-"}${hovered.model ? " · " + hovered.model : ""}`;
-  const lines = [nameLine, hovered.dept, sessionLine, hovered.state, hovered.toolName ?? "-", `${hovered.elapsedTicks}t`];
+  // ADR-007 (b)-2: 依頼文行。requestText 無しは "-" を出す（行数を固定し高さ計算を単純化）。
+  const requestLine = `req: ${hovered.requestText ? truncateForDisplay(hovered.requestText, HOVER_CARD_REQUEST_MAX_CHARS) : "-"}`;
+  const lines = [nameLine, hovered.dept, sessionLine, hovered.state, hovered.toolName ?? "-", requestLine, `${hovered.elapsedTicks}t`];
 
   lines.forEach((line, index) => {
     ctx.fillText(line, x + CARD_MARGIN_PX, y + 14 + index * 13);

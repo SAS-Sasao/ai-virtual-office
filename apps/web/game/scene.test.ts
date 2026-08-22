@@ -559,6 +559,136 @@ describe("Scene: setPointer hit test + hoveredCharacter (M1-4b AC-6)", () => {
   });
 });
 
+describe("Scene: requestText propagation (ADR-007 (b)-2 AC-1/AC-2/AC-3/AC-6)", () => {
+  it("AC-1a: reflects requestText on the claimed roster character (claim path)", () => {
+    const { scene, officeState } = buildScene(false);
+
+    officeState.applyEvent(
+      ev({ type: "session_start", sessionId: "sess-1", ts: 1000, org: "domain-tech-collection", dept: "dept-research", role: "tech-researcher" }),
+    );
+    officeState.applyEvent(
+      ev({
+        type: "pre_tool",
+        sessionId: "sess-1",
+        toolName: "Edit",
+        ts: 1100,
+        org: "domain-tech-collection",
+        dept: "dept-research",
+        role: "tech-researcher",
+        requestText: "設計書を更新して",
+      }),
+    );
+
+    const researcher = scene.getRuntimeCharacters().find((c) => c.id === "domain-tech-collection:tech-researcher")!;
+    expect(researcher.requestText).toBe("設計書を更新して");
+  });
+
+  it("AC-1b: reflects requestText on a freshly-spawned visitor (new-generation branch of applyVisitor)", () => {
+    const { scene, officeState } = buildScene(true);
+
+    // このセッションの最初のイベント自体に requestText が乗っている
+    // （applyVisitor の新規生成分岐を通る唯一の機会）。
+    officeState.applyEvent(
+      ev({ type: "pre_tool", sessionId: "visitor-1", toolName: "Bash", ts: 1000, org: "domain-tech-collection", requestText: "調査して" }),
+    );
+
+    const visitor = scene.getRuntimeCharacters().find((c) => c.sessionId === "visitor-1")!;
+    expect(visitor.kind).toBe("visitor");
+    expect(visitor.requestText).toBe("調査して");
+  });
+
+  it("AC-1c: reflects requestText that arrives after a visitor already exists (既存更新分岐)", () => {
+    const { scene, officeState } = buildScene(true);
+
+    officeState.applyEvent(ev({ type: "session_start", sessionId: "visitor-2", ts: 1000, org: "domain-tech-collection" }));
+    const before = scene.getRuntimeCharacters().find((c) => c.sessionId === "visitor-2")!;
+    expect(before.requestText).toBeUndefined();
+
+    officeState.applyEvent(
+      ev({ type: "pre_tool", sessionId: "visitor-2", toolName: "Bash", ts: 1100, org: "domain-tech-collection", requestText: "後で来た依頼" }),
+    );
+
+    const after = scene.getRuntimeCharacters().find((c) => c.sessionId === "visitor-2")!;
+    expect(after.requestText).toBe("後で来た依頼");
+  });
+
+  it("AC-2: clears requestText when the session disappears from the snapshot (releaseClaim)", () => {
+    const { scene, officeState } = buildScene(false);
+
+    officeState.applyEvent(
+      ev({ type: "session_start", sessionId: "sess-1", ts: 1000, org: "domain-tech-collection", dept: "dept-research", role: "tech-researcher" }),
+    );
+    officeState.applyEvent(
+      ev({
+        type: "pre_tool",
+        sessionId: "sess-1",
+        toolName: "Edit",
+        ts: 1100,
+        org: "domain-tech-collection",
+        dept: "dept-research",
+        role: "tech-researcher",
+        requestText: "設計書を更新して",
+      }),
+    );
+    officeState.applyEvent(ev({ type: "session_end", sessionId: "sess-1", ts: 2000 }));
+
+    const researcher = scene.getRuntimeCharacters().find((c) => c.id === "domain-tech-collection:tech-researcher")!;
+    expect(researcher.requestText).toBeUndefined();
+  });
+
+  it("AC-3: HoveredCharacterDetail.requestText reflects the hit character's requestText", () => {
+    const { scene, officeState } = buildScene(false);
+
+    officeState.applyEvent(
+      ev({ type: "session_start", sessionId: "sess-1", ts: 1000, org: "domain-tech-collection", dept: "dept-research", role: "tech-researcher" }),
+    );
+    officeState.applyEvent(
+      ev({
+        type: "pre_tool",
+        sessionId: "sess-1",
+        toolName: "Edit",
+        ts: 1100,
+        org: "domain-tech-collection",
+        dept: "dept-research",
+        role: "tech-researcher",
+        requestText: "設計書を更新して",
+      }),
+    );
+
+    scene.setPointer(2 * TILE_SIZE + 5, 4 * TILE_SIZE + 5);
+
+    expect(scene.getHoveredCharacter()?.requestText).toBe("設計書を更新して");
+  });
+
+  it("AC-6: leaves the sub character's requestText undefined even though the parent session carries one (session-level scoping)", () => {
+    const { scene, officeState } = buildScene(true);
+
+    officeState.applyEvent(
+      ev({ type: "session_start", sessionId: "sess-1", ts: 1000, org: "domain-tech-collection", dept: "dept-research", role: "tech-researcher" }),
+    );
+    officeState.applyEvent(
+      ev({
+        type: "pre_tool",
+        sessionId: "sess-1",
+        toolName: "Task",
+        subagentType: "retail-helper",
+        ts: 1100,
+        org: "domain-tech-collection",
+        dept: "dept-retail-domain",
+        role: "retail-domain-researcher",
+        requestText: "小売ドメインを調べて",
+      }),
+    );
+
+    const sub = scene.getRuntimeCharacters().find((c) => c.kind === "sub")!;
+    expect(sub.requestText).toBeUndefined();
+
+    // 対照: 親（claim 済み roster）は session 単位の requestText を保持している
+    const researcher = scene.getRuntimeCharacters().find((c) => c.id === "domain-tech-collection:tech-researcher")!;
+    expect(researcher.requestText).toBe("小売ドメインを調べて");
+  });
+});
+
 describe("Scene: fast-mode determinism (AC-7)", () => {
   it("produces the same final character list for the same event sequence run twice", () => {
     const events: Array<Partial<OfficeEvent> & Pick<OfficeEvent, "type" | "sessionId" | "ts">> = [
