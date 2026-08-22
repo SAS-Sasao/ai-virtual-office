@@ -42,6 +42,9 @@ export interface RuntimeCharacter {
   sessionId: string | null;
   state: CharacterState;
   toolName?: string;
+  /** セッションが着手している作業依頼の本文の短縮表示元（ADR-007 (b)-2）。session
+   *  単位（claim 済み roster / visitor）でのみ設定され、sub には設定しない。 */
+  requestText?: string;
   x: number;
   y: number;
   direction: SpriteDirection;
@@ -69,6 +72,8 @@ export interface HoveredCharacterDetail {
   toolName?: string;
   /** claim 済み roster のみ。visitor/sub は不明のため undefined（README 抽出仕様 2 からの唯一の逸脱点）。 */
   model?: string;
+  /** RuntimeCharacter.requestText の透過（ADR-007 (b)-2）。sub は常に undefined。 */
+  requestText?: string;
   elapsedTicks: number;
 }
 
@@ -368,6 +373,7 @@ export class Scene {
       state: character.state,
       toolName: character.toolName,
       model: character.model,
+      requestText: character.requestText,
       elapsedTicks: Math.max(0, this.clock - character.lastEventTick),
     };
   }
@@ -415,6 +421,7 @@ export class Scene {
     character.sessionId = session.sessionId;
     character.state = session.state;
     character.toolName = session.toolName;
+    character.requestText = session.requestText;
     this.touch(character);
     // roster は常に自席にいるため、claim は歩行を伴わない（設計メモ: 「自席で表現」）。
   }
@@ -426,6 +433,7 @@ export class Scene {
     character.sessionId = null;
     character.state = "idle";
     character.toolName = undefined;
+    character.requestText = undefined;
     this.touch(character);
     // roster はそもそも自席から離れていないため、"自席へ戻る" は既に成立している。
   }
@@ -446,6 +454,7 @@ export class Scene {
         sessionId: session.sessionId,
         state: "walk",
         toolName: session.toolName,
+        requestText: session.requestText,
         x: entrance.x,
         y: entrance.y,
         direction: "down",
@@ -465,6 +474,7 @@ export class Scene {
     existing.dept = session.dept ?? existing.dept;
     existing.role = session.role ?? existing.role;
     existing.toolName = session.toolName;
+    existing.requestText = session.requestText;
     this.touch(existing);
     if (!existing.path || existing.path.length === 0) {
       existing.state = session.state;
